@@ -32,7 +32,7 @@ public class Chat extends VerticalLayout {
 
     private final ChatAssistant chatAssistant;
 
-    private static final String username = "Michaelangelo";
+    private static final String username = "Michaelangelos";
     private static final int CHAT_HEIGHT = 500;
 
     public Chat() {
