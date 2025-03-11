@@ -1,9 +1,7 @@
 package mu.smalltalk;
 
-import com.vaadin.flow.component.Html;
 import com.vaadin.flow.component.Unit;
 import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.messages.MessageInput;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -28,7 +26,6 @@ public class Chat extends VerticalLayout {
     private final Upload mediaUpload;
     private final Aes256 aes;
     private final EncryptionService encryptionService;
-    private final Div mediaContainer;
 
     private final ChatAssistant chatAssistant;
 
@@ -40,7 +37,6 @@ public class Chat extends VerticalLayout {
         encryptionService = new EncryptionService(aes);
 
         messageInput = new MessageInput();
-        mediaContainer = new Div();
 
         chatAssistant = new ChatAssistant(true);
 
@@ -50,30 +46,15 @@ public class Chat extends VerticalLayout {
         messageInput.getStyle().setBackgroundColor("cyan");
         chatAssistant.getStyle().set("background-color", "lightyellow");
 
-        mediaContainer.getStyle().set("width", "100%");
-        mediaContainer.getStyle().set("padding", "10px");
-        mediaContainer.getStyle().set("background-color", "lightgreen");
-        mediaContainer.getStyle().set("margin-top", "10px");
-
         MemoryBuffer buffer = new MemoryBuffer();
         mediaUpload = new Upload(buffer);
         configureMediaUpload(mediaUpload, buffer);
 
         messageInput.setWidthFull();
 
-        add(chatAssistant, messageInput, mediaUpload, mediaContainer);
+        add(chatAssistant, messageInput, mediaUpload);
 
         setupMessageHandler();
-
-        // sendMarkdownMessage(
-        //         "# Welcome to the Chat!\n\nThis chat supports **Markdown** and you can use it in the following ways:\n\n"
-        //                 +
-        //                 "- *Italic text* (`*Italic text*`)\n" +
-        //                 "- **Bold text** (`**Bold text**`)\n" +
-        //                 "- `code` (`` `code` ``)\n" +
-        //                 "- Links: [Example](http://example.com)\n" +
-        //                 "- Headers with # or ## etc.\n\n" +
-        //                 "Try sending a message with Markdown format!");
     }
 
     private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
@@ -91,33 +72,21 @@ public class Chat extends VerticalLayout {
                 byte[] fileData = inputStream.readAllBytes();
                 String encodedString = Base64.getEncoder().encodeToString(fileData);
 
-                try {
-                    Base64FileHandler.writeBase64ToFile(encodedString, fileName);
-                    sendMarkdownMessage("✅ The file " + fileName );
-                } catch (IOException e) {
-                    sendMarkdownMessage("❌ Error saving the file:" + e.getMessage() );
-                }
-
                 if (mimeType.startsWith("image/")) {
-                    String img = "<img src='data:image/png;base64, " + encodedString + "' width='200px' />";
-                    mediaContainer.add(new Html(img), new H3(fileName), new Hr());
-
-                    sendMarkdownMessage("Image uploaded " + fileName);
+                    String markdownImage = "![Image](data:image/png;base64," + encodedString + ")";
+                    sendMarkdownMessage("✅ The file " + fileName + "\n" + markdownImage);
                 } else if (mimeType.startsWith("audio/")) {
-                    String audio = "<audio controls><source src='data:audio/mpeg;base64," + encodedString
-                            + "' type='audio/mpeg'></audio>";
-                    mediaContainer.add(new Html(audio), new H3(fileName), new Hr());
-
-                    sendMarkdownMessage("Audio file uploaded " + fileName);
+                    String audioPlayerHTML = "<audio controls><source src='data:audio/mpeg;base64," + encodedString
+                            + "' type='" + mimeType + "'></audio>";
+                    sendMarkdownMessage("✅ The file " + fileName + "\n" + audioPlayerHTML);
                 }
-
 
             } catch (IOException e) {
-                sendMarkdownMessage("❌ Error processing the file: " + e.getMessage() );
+                sendMarkdownMessage("❌ Error processing the file: " + e.getMessage());
             }
         });
 
-        upload.addFailedListener(event -> sendMarkdownMessage("❌ Upload failed: " + event.getReason() ));
+        upload.addFailedListener(event -> sendMarkdownMessage("❌ Upload failed: " + event.getReason()));
     }
 
     private void setupMessageHandler() {
@@ -130,15 +99,15 @@ public class Chat extends VerticalLayout {
 
     /**
      * Send a message with Markdown format to the chat
-     * 
+     *
      * @param markdownContent Message content in Markdown format
      */
     private void sendMarkdownMessage(String markdownContent) {
         Message message = Message.builder()
-                .content(markdownContent) 
-                .messageTime(LocalDateTime.now()) 
-                .name(username) 
-                .avatar("user-avatar.png") 
+                .content(markdownContent)
+                .messageTime(LocalDateTime.now())
+                .name(username)
+                .avatar("user-avatar.png")
                 .build();
 
         chatAssistant.sendMessage(message);
@@ -156,8 +125,4 @@ public class Chat extends VerticalLayout {
             throw new RuntimeException("Failed to initialize encryption", e);
         }
     }
-    
-
-    
-   
 }
