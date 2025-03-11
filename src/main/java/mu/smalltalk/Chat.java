@@ -48,7 +48,7 @@ public class Chat extends VerticalLayout {
         chatAssistant.setHeight(CHAT_HEIGHT, Unit.PIXELS);
 
         messageInput.getStyle().setBackgroundColor("cyan");
-        chatAssistant.getStyle().set("background-color", "lightgray");
+        chatAssistant.getStyle().set("background-color", "lightyellow");
 
         mediaContainer.getStyle().set("width", "100%");
         mediaContainer.getStyle().set("padding", "10px");
@@ -93,32 +93,31 @@ public class Chat extends VerticalLayout {
 
                 try {
                     Base64FileHandler.writeBase64ToFile(encodedString, fileName);
-                    sendMarkdownMessage("✅ The file `" + fileName );
+                    sendMarkdownMessage("✅ The file " + fileName );
                 } catch (IOException e) {
-                    sendMarkdownMessage("❌ Error saving the file: `" + e.getMessage() + "`");
+                    sendMarkdownMessage("❌ Error saving the file:" + e.getMessage() );
                 }
 
                 if (mimeType.startsWith("image/")) {
                     String img = "<img src='data:image/png;base64, " + encodedString + "' width='200px' />";
                     mediaContainer.add(new Html(img), new H3(fileName), new Hr());
 
-                    sendMarkdownMessage("**Image uploaded:** " + fileName);
+                    sendMarkdownMessage("Image uploaded " + fileName);
                 } else if (mimeType.startsWith("audio/")) {
                     String audio = "<audio controls><source src='data:audio/mpeg;base64," + encodedString
                             + "' type='audio/mpeg'></audio>";
                     mediaContainer.add(new Html(audio), new H3(fileName), new Hr());
 
-                    sendMarkdownMessage("**Audio file uploaded:** " + fileName);
+                    sendMarkdownMessage("Audio file uploaded " + fileName);
                 }
 
-                sendMarkdownMessage("✅ The file `" + fileName );
 
             } catch (IOException e) {
-                sendMarkdownMessage("❌ Error processing the file: `" + e.getMessage() + "`");
+                sendMarkdownMessage("❌ Error processing the file: " + e.getMessage() );
             }
         });
 
-        upload.addFailedListener(event -> sendMarkdownMessage("❌ Upload failed: `" + event.getReason() + "`"));
+        upload.addFailedListener(event -> sendMarkdownMessage("❌ Upload failed: " + event.getReason() ));
     }
 
     private void setupMessageHandler() {
@@ -157,4 +156,8 @@ public class Chat extends VerticalLayout {
             throw new RuntimeException("Failed to initialize encryption", e);
         }
     }
+    
+
+    
+   
 }
