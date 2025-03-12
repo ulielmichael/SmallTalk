@@ -11,8 +11,10 @@ import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
+import com.vaadin.flow.shared.Registration;
 import mu.Chatstorage;
 import mu.smalltalk.Services.EncryptionService;
+import mu.smalltalk.Services.GlobalMessageBroadcaster;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,6 +32,7 @@ public class Chat extends VerticalLayout {
     private static final int CHAT_HEIGHT = 500;
 
     private final String sessionId;
+    private Registration broadcasterRegistration;
 
     public Chat() {
         sessionId = initializeSessionId();
@@ -55,12 +58,30 @@ public class Chat extends VerticalLayout {
 
         add(chatContainer, messageInput, mediaUpload);
 
-        // Loading existing messages
         for (String message : Chatstorage.getMessages()) {
             addMessageToChat(message);
         }
 
         setupMessageHandler();
+        registerWithBroadcaster();
+    }
+
+    private void registerWithBroadcaster() {
+        UI ui = UI.getCurrent();
+        if (ui != null) {
+            broadcasterRegistration = GlobalMessageBroadcaster.register(ui, message -> {
+                ui.access(() -> {
+                    addMessageToChat(message);
+                });
+            });
+            
+            ui.addDetachListener(event -> {
+                if (broadcasterRegistration != null) {
+                    broadcasterRegistration.remove();
+                    broadcasterRegistration = null;
+                }
+            });
+        }
     }
 
     private String initializeSessionId() {
@@ -78,6 +99,8 @@ public class Chat extends VerticalLayout {
         upload.setUploadButton(uploadButton);
         upload.setAcceptedFileTypes("image/*", "audio/*");
         upload.setMaxFileSize(16 * 1024 * 1024); // 16 MB
+        
+        UI currentUI = UI.getCurrent();
     
         upload.addSucceededListener(event -> {
             String fileName = event.getFileName();
@@ -97,14 +120,20 @@ public class Chat extends VerticalLayout {
                     broadcastMessage(sessionId + ": ✅ Audio uploaded: " + fileName + "<br>" + audioHtml);
                 }
     
-                encryptionService.encryptAsync(fileData)
-                    .thenAccept(encryptedData -> {
-                        broadcastMessage(sessionId + ": ✅ File " + fileName + " encrypted successfully");
-                    })
-                    .exceptionally(ex -> {  
-                        broadcastMessage(sessionId + ": ❌ Error encrypting file: " + ex.getMessage());
-                        return null;
-                    });
+                currentUI.access(() -> {
+                    encryptionService.encryptAsync(fileData)
+                        .thenAccept(encryptedData -> {
+                            currentUI.access(() -> {
+                                broadcastMessage(sessionId + ": ✅ File " + fileName + " encrypted successfully");
+                            });
+                        })
+                        .exceptionally(ex -> {  
+                            currentUI.access(() -> {
+                                broadcastMessage(sessionId + ": ❌ Error encrypting file: " + ex.getMessage());
+                            });
+                            return null;
+                        });
+                });
             } catch (IOException e) {
                 broadcastMessage(sessionId + ": ❌ Error processing the file: " + e.getMessage());
             }
@@ -114,52 +143,58 @@ public class Chat extends VerticalLayout {
     }
 
     private void setupMessageHandler() {
+        UI currentUI = UI.getCurrent();
+        
         messageInput.addSubmitListener(submitEvent -> {
             String message = submitEvent.getValue();
             System.out.println("Received message from " + sessionId + ": " + message); 
             broadcastMessage(sessionId + ": You: " + message); 
 
-            encryptionService.encryptStringAsync(message)
+            currentUI.access(() -> {
+                encryptionService.encryptStringAsync(message)
                     .thenAccept(encryptedMessage -> {
-                        String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
-                        broadcastMessage(sessionId + ": <b>Encrypted:</b> " + encodedMessage);
-                        decryptAndDisplayMessage(encodedMessage);
+                        currentUI.access(() -> {
+                            String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
+                            broadcastMessage(sessionId + ": <b>Encrypted:</b> " + encodedMessage);
+                            decryptAndDisplayMessage(encodedMessage);
+                        });
                     })
                     .exceptionally(ex -> {
-                        broadcastMessage(sessionId + ": <b>Error encrypting message:</b> " + ex.getMessage());
+                        currentUI.access(() -> {
+                            broadcastMessage(sessionId + ": <b>Error encrypting message:</b> " + ex.getMessage());
+                        });
                         return null;
                     });
+            });
         });
     }
 
     private void decryptAndDisplayMessage(String encodedMessage) {
+        UI currentUI = UI.getCurrent();
         byte[] encryptedMessage = Base64.getDecoder().decode(encodedMessage);
 
-        encryptionService.decryptToStringAsync(encryptedMessage)
+        currentUI.access(() -> {
+            encryptionService.decryptToStringAsync(encryptedMessage)
                 .thenAccept(decryptedMessage -> {
-                    broadcastMessage(sessionId + ": <b>Decrypted:</b> " + decryptedMessage);
+                    currentUI.access(() -> {
+                        broadcastMessage(sessionId + ": <b>Decrypted:</b> " + decryptedMessage);
+                    });
                 })
                 .exceptionally(ex -> {
-                    broadcastMessage(sessionId + ": <b>Error decrypting message:</b> " + ex.getMessage());
+                    currentUI.access(() -> {
+                        broadcastMessage(sessionId + ": <b>Error decrypting message:</b> " + ex.getMessage());
+                    });
                     return null;
                 });
+        });
     }
 
     private void broadcastMessage(String content) {
         Chatstorage.addMessage(content);
-
-        // Update all users in real-time
-        UI.getCurrent().getSession().getUIs().forEach(ui -> 
-            ui.access(() -> {
-                Chat chatView = (Chat) ui.getChildren()
-                                         .filter(component -> component instanceof Chat)
-                                         .findFirst()
-                                         .orElse(null);
-                if (chatView != null) {
-                    chatView.addMessageToChat(content);
-                }
-            })
-        );
+        
+        GlobalMessageBroadcaster.broadcast(content);
+        
+   
     }
 
     private void addMessageToChat(String content) {
