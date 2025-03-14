@@ -49,11 +49,11 @@ public class Chat extends VerticalLayout {
 
         chatContainer.setWidthFull();
         chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
-        chatContainer.getStyle().set("background-color", "lightyellow");
+        chatContainer.getStyle().set("background-color", "pink");
         chatContainer.getStyle().set("overflow-y", "auto");
         chatContainer.getStyle().set("border", "1px solid black");
 
-        messageInput.getStyle().setBackgroundColor("cyan");
+        messageInput.getStyle().setBackgroundColor("gray");
         messageInput.setWidthFull();
 
         MemoryBuffer buffer = new MemoryBuffer();
