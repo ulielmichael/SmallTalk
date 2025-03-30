@@ -8,11 +8,13 @@ import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.messages.MessageInput;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.page.Push;
 import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.shared.Registration;
+import com.vaadin.flow.shared.communication.PushMode;
 import mu.Chatstorage;
 import mu.smalltalk.Services.EncryptionService;
 import mu.smalltalk.Services.GlobalMessageBroadcaster;
@@ -24,6 +26,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
 
+@Push(PushMode.AUTOMATIC) // הוספנו Push ישירות לוויו כדי לתמוך ברענון אוטומטי
 @Route("chat")
 public class Chat extends VerticalLayout {
 
@@ -60,28 +63,79 @@ public class Chat extends VerticalLayout {
         mediaUpload = new Upload(buffer);
         configureMediaUpload(mediaUpload, buffer);
 
-        add(new H2(sessionId),chatContainer, messageInput, mediaUpload);
+        add(new H2(sessionId), chatContainer, messageInput, mediaUpload);
 
-        // Load existing messages from storage
+        // טעינת הודעות קיימות מהאחסון
         for (String message : Chatstorage.getMessages()) {
             addMessageToChat(message);
         }
 
         setupMessageHandler();
         registerWithBroadcaster();
+        
+        // הוספת פונקציונליות JavaScript לזיהוי שינויים בזמן אמת
+        setupClientRefreshHandling();
+    }
+
+    private void setupClientRefreshHandling() {
+        UI ui = UI.getCurrent();
+        if (ui != null) {
+            // הוספת קוד JavaScript שיפעיל את רענון הדף בכל פעם שמתקבלת הודעה
+            ui.getPage().executeJs(
+                "window.addEventListener('storage', function(e) {" +
+                "   if (e.key === 'chat-update-trigger') {" +
+                "       $0.onChatUpdate(e.newValue);" +
+                "   }" +
+                "});", getElement());
+            
+            // הוספת מתודה שהקוד JavaScript יכול לקרוא אליה
+            getElement().executeJs(
+                "this.onChatUpdate = function(timestamp) {" +
+                "   this.$server.handleChatUpdate(timestamp);" +
+                "}");
+        }
+    }
+    
+    // מתודה חדשה שתיקרא על ידי JavaScript כשיש עדכון
+    public void handleChatUpdate(String timestamp) {
+        UI ui = UI.getCurrent();
+        if (ui != null) {
+            ui.access(() -> {
+                // מכיוון שהודעה חדשה נוספה כבר לשרת, אנחנו רק צריכים לרענן את ה-UI
+                refreshChatContainer();
+            });
+        }
+    }
+    
+    private void refreshChatContainer() {
+        // מנקים את התצוגה הנוכחית
+        chatContainer.removeAll();
+        
+        // טוענים מחדש את כל ההודעות
+        for (String message : Chatstorage.getMessages()) {
+            addMessageToChat(message);
+        }
+        
+        // גלילה לתחתית הצ'אט
+        chatContainer.getElement().executeJs("this.scrollTop = this.scrollHeight");
     }
 
     private void registerWithBroadcaster() {
         UI ui = UI.getCurrent();
         if (ui != null) {
-            // Register this UI instance with the broadcaster
+            // רישום ה-UI הנוכחי ל-broadcaster
             broadcasterRegistration = GlobalMessageBroadcaster.register(ui, message -> {
                 ui.access(() -> {
                     addMessageToChat(message);
+                    
+                    // עדכון localStorage כדי לגרום לכל החלונות האחרים להתעדכן
+                    ui.getPage().executeJs(
+                        "localStorage.setItem('chat-update-trigger', Date.now().toString());"
+                    );
                 });
             });
             
-            // Make sure to remove the registration when the UI is detached
+            // וידוא הסרת הרישום כשהדף נסגר
             ui.addDetachListener(event -> {
                 if (broadcasterRegistration != null) {
                     broadcasterRegistration.remove();
@@ -89,27 +143,61 @@ public class Chat extends VerticalLayout {
                 }
             });
             
-            // Add a connect listener to ensure the broadcaster is registered when page is loaded or refreshed
-            ui.getPage().addJavaScript("window.addEventListener('load', function() { $0.onClientReconnect(); });");
-            ui.getElement().executeJs("this.onClientReconnect = function() { this.$server.ensureRegistration(); }");
+            // הוספת listener לחיבור מחדש כשהדף נטען או מרוענן
+            ui.getPage().executeJs(
+                "window.addEventListener('load', function() { $0.onClientReconnect(); });", getElement());
+            getElement().executeJs(
+                "this.onClientReconnect = function() { this.$server.ensureRegistration(); }");
         }
     }
     
-    // Add this method to be called when client reconnects
+    // מתודה זו תיקרא כשהלקוח מתחבר מחדש
     public void ensureRegistration() {
         if (broadcasterRegistration == null) {
             registerWithBroadcaster();
         }
+        
+        // רענון מיידי של הצ'אט במקרה של חיבור מחדש
+        refreshChatContainer();
     }
 
     private String initializeSessionId() {
         VaadinSession session = VaadinSession.getCurrent();
-        if (session.getAttribute("sessionId") == null) {
-            String uniqueId = UUID.randomUUID().toString();
-            session.setAttribute("sessionId", uniqueId);
-            return uniqueId;
-        }
-        return session.getAttribute("sessionId").toString();
+        
+        // אם יש session ID ב-localStorage, נשתמש בו כדי לאפשר סשן בין דפדפנים
+        UI.getCurrent().getPage().executeJs(
+            "return localStorage.getItem('chat-session-id');")
+            .then(String.class, result -> {
+                if (result != null && !result.isEmpty()) {
+                    // נשתמש ב-ID שכבר קיים
+                    session.setAttribute("sessionId", result);
+                    updateSessionIdDisplay(result);
+                } else if (session.getAttribute("sessionId") != null) {
+                    // נשמור את ה-ID הקיים ב-localStorage
+                    String currentId = session.getAttribute("sessionId").toString();
+                    UI.getCurrent().getPage().executeJs(
+                        "localStorage.setItem('chat-session-id', $0);", currentId);
+                } else {
+                    // ניצור ID חדש
+                    String uniqueId = UUID.randomUUID().toString();
+                    session.setAttribute("sessionId", uniqueId);
+                    UI.getCurrent().getPage().executeJs(
+                        "localStorage.setItem('chat-session-id', $0);", uniqueId);
+                }
+            });
+        
+        // נחזיר את הערך הנוכחי או ערך זמני עד שה-JavaScript יעדכן אותו
+        return session.getAttribute("sessionId") != null ? 
+               session.getAttribute("sessionId").toString() : "Initializing...";
+    }
+    
+    // מתודה לעדכון תצוגת ה-sessionId
+    private void updateSessionIdDisplay(String sessionId) {
+        getChildren().forEach(component -> {
+            if (component instanceof H2) {
+                ((H2) component).setText(sessionId);
+            }
+        });
     }
 
     private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
@@ -219,12 +307,11 @@ public class Chat extends VerticalLayout {
         });
     }
     
-
     private void broadcastMessage(String content) {
-        // Add to storage
+        // הוספה לאחסון
         Chatstorage.addMessage(content);
         
-        // Broadcast to all connected clients
+        // שידור לכל הלקוחות המחוברים
         GlobalMessageBroadcaster.broadcast(content);
     }
 
@@ -238,7 +325,7 @@ public class Chat extends VerticalLayout {
 
         chatContainer.add(messageDiv); 
         
-        // Scroll to the bottom to show the latest message
+        // גלילה לתחתית כדי להציג את ההודעה האחרונה
         chatContainer.getElement().executeJs("this.scrollTop = this.scrollHeight");
     }
 
