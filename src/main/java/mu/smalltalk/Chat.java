@@ -8,13 +8,11 @@ import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.messages.MessageInput;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.page.Push;
 import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.shared.Registration;
-import com.vaadin.flow.shared.communication.PushMode;
 import mu.Chatstorage;
 import mu.smalltalk.Services.EncryptionService;
 import mu.smalltalk.Services.GlobalMessageBroadcaster;
@@ -24,9 +22,9 @@ import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
-@Push(PushMode.AUTOMATIC) // הוספנו Push ישירות לוויו כדי לתמוך ברענון אוטומטי
 @Route("chat")
 public class Chat extends VerticalLayout {
 
@@ -38,8 +36,11 @@ public class Chat extends VerticalLayout {
     private static final int CHAT_HEIGHT = 500;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    private final String sessionId;
+    private String sessionId;
     private Registration broadcasterRegistration;
+    
+    // מונה את מספר ההודעות שכבר נצפו - משמש למניעת כפילויות
+    private int lastSeenMessageCount = 0;
 
     public Chat() {
         sessionId = initializeSessionId();
@@ -65,137 +66,161 @@ public class Chat extends VerticalLayout {
 
         add(new H2(sessionId), chatContainer, messageInput, mediaUpload);
 
-        // טעינת הודעות קיימות מהאחסון
-        for (String message : Chatstorage.getMessages()) {
+        // טעינה התחלתית של הודעות קיימות
+        List<String> existingMessages = Chatstorage.getMessages();
+        for (String message : existingMessages) {
             addMessageToChat(message);
         }
+        lastSeenMessageCount = existingMessages.size();
 
         setupMessageHandler();
         registerWithBroadcaster();
         
-        // הוספת פונקציונליות JavaScript לזיהוי שינויים בזמן אמת
-        setupClientRefreshHandling();
+        // הגדרת תקשורת בין דפדפנים
+        setupCrossBrowserCommunication();
     }
 
-    private void setupClientRefreshHandling() {
+    private void setupCrossBrowserCommunication() {
         UI ui = UI.getCurrent();
         if (ui != null) {
-            // הוספת קוד JavaScript שיפעיל את רענון הדף בכל פעם שמתקבלת הודעה
+            // מאזין JavaScript לאירועי localStorage (מופעל כאשר localStorage משתנה בטאבים/חלונות אחרים)
             ui.getPage().executeJs(
                 "window.addEventListener('storage', function(e) {" +
                 "   if (e.key === 'chat-update-trigger') {" +
-                "       $0.onChatUpdate(e.newValue);" +
+                "       $0.$server.handleChatUpdate(e.newValue);" +
                 "   }" +
                 "});", getElement());
             
-            // הוספת מתודה שהקוד JavaScript יכול לקרוא אליה
-            getElement().executeJs(
-                "this.onChatUpdate = function(timestamp) {" +
-                "   this.$server.handleChatUpdate(timestamp);" +
-                "}");
+            // בדיקת הודעות חדשות כל שנייה כפתרון חלופי לסנכרון בין דפדפנים
+            ui.getPage().executeJs(
+                "setInterval(function() {" +
+                "   $0.$server.checkForNewMessages();" +
+                "}, 1000);", getElement());
         }
     }
     
-    // מתודה חדשה שתיקרא על ידי JavaScript כשיש עדכון
+    // נקרא על ידי JavaScript כאשר localStorage משתנה (עבור אותו דפדפן, טאבים שונים)
     public void handleChatUpdate(String timestamp) {
         UI ui = UI.getCurrent();
-        if (ui != null) {
+        if (ui != null && ui.isAttached()) {
             ui.access(() -> {
-                // מכיוון שהודעה חדשה נוספה כבר לשרת, אנחנו רק צריכים לרענן את ה-UI
-                refreshChatContainer();
+                checkForNewMessages(); // בדיקה רק להודעות חדשות במקום טעינה מחדש של כל ההודעות
+                ui.push();
             });
         }
     }
     
-    private void refreshChatContainer() {
-        // מנקים את התצוגה הנוכחית
-        chatContainer.removeAll();
-        
-        // טוענים מחדש את כל ההודעות
-        for (String message : Chatstorage.getMessages()) {
-            addMessageToChat(message);
+    // בדיקה תקופתית להודעות חדשות (עובדת בין דפדפנים שונים)
+    public void checkForNewMessages() {
+        UI ui = UI.getCurrent();
+        if (ui != null && ui.isAttached()) {
+            ui.access(() -> {
+                List<String> allMessages = Chatstorage.getMessages();
+                int currentMessageCount = allMessages.size();
+                
+                if (currentMessageCount > lastSeenMessageCount) {
+                    // הוספת הודעות חדשות בלבד
+                    for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
+                        addMessageToChat(allMessages.get(i));
+                    }
+                    lastSeenMessageCount = currentMessageCount;
+                    
+                    // גלילה לתחתית
+                    chatContainer.getElement().executeJs("this.scrollTop = this.scrollHeight");
+                    ui.push();
+                }
+            });
         }
-        
-        // גלילה לתחתית הצ'אט
-        chatContainer.getElement().executeJs("this.scrollTop = this.scrollHeight");
+    }
+    
+    // שינוי מתודת הרענון להוספת הודעות חדשות בלבד במקום טעינה מחדש של כל התוכן
+    public void refreshChatContainer() {
+        checkForNewMessages();
     }
 
     private void registerWithBroadcaster() {
         UI ui = UI.getCurrent();
         if (ui != null) {
-            // רישום ה-UI הנוכחי ל-broadcaster
+            System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
+            
+            // רישום ה-UI הנוכחי ב-broadcaster
             broadcasterRegistration = GlobalMessageBroadcaster.register(ui, message -> {
-                ui.access(() -> {
-                    addMessageToChat(message);
-                    
-                    // עדכון localStorage כדי לגרום לכל החלונות האחרים להתעדכן
-                    ui.getPage().executeJs(
-                        "localStorage.setItem('chat-update-trigger', Date.now().toString());"
-                    );
-                });
+                if (ui.isAttached()) {
+                    ui.access(() -> {
+                        addMessageToChat(message);
+                        ui.push();
+                    });
+                }
             });
             
-            // וידוא הסרת הרישום כשהדף נסגר
+            if (broadcasterRegistration == null) {
+                System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
+                Notification.show("Failed to connect to the chat server. Please refresh the page.");
+            }
+            
+            // וידוא שהרישום מוסר כאשר הדף נסגר
             ui.addDetachListener(event -> {
+                System.out.println("UI Detached: " + ui.getUIId());
                 if (broadcasterRegistration != null) {
                     broadcasterRegistration.remove();
                     broadcasterRegistration = null;
                 }
             });
             
-            // הוספת listener לחיבור מחדש כשהדף נטען או מרוענן
+            // הוספת מאזין להתחברות מחדש
             ui.getPage().executeJs(
-                "window.addEventListener('load', function() { $0.onClientReconnect(); });", getElement());
-            getElement().executeJs(
-                "this.onClientReconnect = function() { this.$server.ensureRegistration(); }");
+                "window.addEventListener('load', function() { $0.$server.ensureRegistration(); });", getElement());
+        } else {
+            System.err.println("Cannot register with broadcaster - UI is null");
         }
     }
     
-    // מתודה זו תיקרא כשהלקוח מתחבר מחדש
+    // נקרא כאשר הלקוח מתחבר מחדש
     public void ensureRegistration() {
         if (broadcasterRegistration == null) {
+            System.out.println("Re-registering with broadcaster after reconnection");
             registerWithBroadcaster();
         }
         
-        // רענון מיידי של הצ'אט במקרה של חיבור מחדש
-        refreshChatContainer();
+        // רענון מיידי של הצ'אט בעת התחברות מחדש
+        checkForNewMessages();
     }
 
     private String initializeSessionId() {
         VaadinSession session = VaadinSession.getCurrent();
+        String uniqueId;
         
-        // אם יש session ID ב-localStorage, נשתמש בו כדי לאפשר סשן בין דפדפנים
+        // יצירת מזהה ייחודי חדש אם צריך
+        if (session.getAttribute("sessionId") == null) {
+            uniqueId = "User-" + UUID.randomUUID().toString().substring(0, 8);
+            session.setAttribute("sessionId", uniqueId);
+            
+            // שמירה ב-localStorage לשימור בין הפעלות דפדפן
+            UI.getCurrent().getPage().executeJs(
+                "localStorage.setItem('chat-session-id', $0);", uniqueId);
+        } else {
+            uniqueId = session.getAttribute("sessionId").toString();
+        }
+        
+        // בדיקת localStorage למזהה קיים (עוזר ברענון דפדפן)
         UI.getCurrent().getPage().executeJs(
             "return localStorage.getItem('chat-session-id');")
             .then(String.class, result -> {
                 if (result != null && !result.isEmpty()) {
-                    // נשתמש ב-ID שכבר קיים
+                    // עדכון המפגש עם המזהה המאוחסן אם הוא קיים
                     session.setAttribute("sessionId", result);
                     updateSessionIdDisplay(result);
-                } else if (session.getAttribute("sessionId") != null) {
-                    // נשמור את ה-ID הקיים ב-localStorage
-                    String currentId = session.getAttribute("sessionId").toString();
-                    UI.getCurrent().getPage().executeJs(
-                        "localStorage.setItem('chat-session-id', $0);", currentId);
-                } else {
-                    // ניצור ID חדש
-                    String uniqueId = UUID.randomUUID().toString();
-                    session.setAttribute("sessionId", uniqueId);
-                    UI.getCurrent().getPage().executeJs(
-                        "localStorage.setItem('chat-session-id', $0);", uniqueId);
+                    this.sessionId = result;
                 }
             });
         
-        // נחזיר את הערך הנוכחי או ערך זמני עד שה-JavaScript יעדכן אותו
-        return session.getAttribute("sessionId") != null ? 
-               session.getAttribute("sessionId").toString() : "Initializing...";
+        return uniqueId;
     }
     
-    // מתודה לעדכון תצוגת ה-sessionId
-    private void updateSessionIdDisplay(String sessionId) {
+    private void updateSessionIdDisplay(String id) {
         getChildren().forEach(component -> {
             if (component instanceof H2) {
-                ((H2) component).setText(sessionId);
+                ((H2) component).setText(id);
             }
         });
     }
@@ -220,39 +245,54 @@ public class Chat extends VerticalLayout {
                 if (mimeType.startsWith("image/")) {
                     String imageHtml = "<img src='data:" + mimeType + ";base64," + base64Data + 
                                        "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
-                    broadcastMessage("[" + timestamp + "] "  + ": ✅ Image uploaded: " + fileName + "<br>" + imageHtml);
+                    sendMessage("[" + timestamp + "] " + sessionId + ": ✅ Image uploaded: " + fileName + "<br>" + imageHtml);
                 } else if (mimeType.startsWith("audio/")) {
                     String audioHtml = "<audio controls><source src='data:" + mimeType + ";base64," + 
                                        base64Data + "' type='" + mimeType + "'></audio>";
-                    broadcastMessage("[" + timestamp + "] " +  ": ✅ Audio uploaded: " + fileName + "<br>" + audioHtml);
+                    sendMessage("[" + timestamp + "] " + sessionId + ": ✅ Audio uploaded: " + fileName + "<br>" + audioHtml);
                 }
     
+                // מציג את הודעת ההצפנה רק למשתמש המקומי
                 currentUI.access(() -> {
                     encryptionService.encryptAsync(fileData)
                         .thenAccept(encryptedData -> {
                             String encTimestamp = dateFormat.format(new Date());
                             currentUI.access(() -> {
-                                broadcastMessage("[" + encTimestamp + "] " + ": ✅ File " + fileName + " encrypted successfully");
+                                // הצג הודעת הצפנה מקומית בלבד
+                                addLocalMessage("[" + encTimestamp + "] " + sessionId + ": ✅ File " + fileName + " encrypted successfully");
+                                currentUI.push();
                             });
                         })
                         .exceptionally(ex -> {  
                             String errorTimestamp = dateFormat.format(new Date());
                             currentUI.access(() -> {
-                                broadcastMessage("[" + errorTimestamp + "] " + ": ❌ Error encrypting file: " + ex.getMessage());
+                                addLocalMessage("[" + errorTimestamp + "] " + sessionId + ": ❌ Error encrypting file: " + ex.getMessage());
+                                currentUI.push();
                             });
                             return null;
                         });
                 });
             } catch (IOException e) {
                 String errorTimestamp = dateFormat.format(new Date());
-                broadcastMessage("[" + errorTimestamp + "] " + ": ❌ Error processing the file: " + e.getMessage());
+                sendMessage("[" + errorTimestamp + "] " + sessionId + ": ❌ Error processing the file: " + e.getMessage());
             }
         });
     
         upload.addFailedListener(event -> {
             String errorTimestamp = dateFormat.format(new Date());
-            broadcastMessage("[" + errorTimestamp + "] " + ": ❌ Upload failed: " + event.getReason());
+            sendMessage("[" + errorTimestamp + "] " + sessionId + ": ❌ Upload failed: " + event.getReason());
         });
+    }
+
+    // מתודה חדשה להוספת הודעות מקומיות בלבד (ללא שידור)
+    private void addLocalMessage(String content) {
+        addMessageToChat(content);
+    }
+
+    // מתודה חדשה לשליחת הודעה לכל המשתמשים
+    private void sendMessage(String content) {
+        // שידור לכל הלקוחות המחוברים בלבד (מניעת כפילויות)
+        GlobalMessageBroadcaster.broadcast(content);
     }
 
     private void setupMessageHandler() {
@@ -261,23 +301,32 @@ public class Chat extends VerticalLayout {
         messageInput.addSubmitListener(submitEvent -> {
             String message = submitEvent.getValue();
             String timestamp = dateFormat.format(new Date());
-            System.out.println("Received message from " + ": " + message); 
-            broadcastMessage("[" + timestamp + "] " +  ": " + message); 
+            System.out.println("Received message from " + sessionId + ": " + message); 
+            
+            // שליחת ההודעה המקורית בלבד לכל המשתמשים
+            sendMessage("[" + timestamp + "] " + sessionId + ": " + message); 
 
+            // הצפנה ופענוח הודעה רק למשתמש השולח (מקומי בלבד)
             currentUI.access(() -> {
                 encryptionService.encryptStringAsync(message)
                     .thenAccept(encryptedMessage -> {
                         String encTimestamp = dateFormat.format(new Date());
                         currentUI.access(() -> {
                             String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
-                            broadcastMessage("[" + encTimestamp + "] " +  ": <b>Encrypted:</b> " + encodedMessage);
-                            decryptAndDisplayMessage(encodedMessage);
+                            
+                            // הצגת הודעה מוצפנת מקומית בלבד
+                            addLocalMessage("[" + encTimestamp + "] " + sessionId + ": <b>Encrypted:</b> " + encodedMessage);
+                            
+                            // פענוח והצגה מקומית בלבד
+                            decryptAndDisplayMessage(encodedMessage, true);
+                            currentUI.push();
                         });
                     })
                     .exceptionally(ex -> {
                         String errorTimestamp = dateFormat.format(new Date());
                         currentUI.access(() -> {
-                            broadcastMessage("[" + errorTimestamp + "] " + ": <b>Error encrypting message:</b> " + ex.getMessage());
+                            addLocalMessage("[" + errorTimestamp + "] " + sessionId + ": <b>Error encrypting message:</b> " + ex.getMessage());
+                            currentUI.push();
                         });
                         return null;
                     });
@@ -285,7 +334,8 @@ public class Chat extends VerticalLayout {
         });
     }
 
-    private void decryptAndDisplayMessage(String encodedMessage) {
+    // מתודה מעודכנת לפענוח והצגת הודעה עם דגל שמציין אם זו הודעה מקומית בלבד
+    private void decryptAndDisplayMessage(String encodedMessage, boolean localOnly) {
         UI currentUI = UI.getCurrent();
         byte[] encryptedMessage = Base64.getDecoder().decode(encodedMessage);
 
@@ -294,25 +344,35 @@ public class Chat extends VerticalLayout {
                 .thenAccept(decryptedMessage -> {
                     String decTimestamp = dateFormat.format(new Date());
                     currentUI.access(() -> {
-                        broadcastMessage("[" + decTimestamp + "] " + ": <b>Decrypted:</b> " + decryptedMessage);
+                        String displayMessage = "[" + decTimestamp + "] " + sessionId + ": <b>Decrypted:</b> " + decryptedMessage;
+                        
+                        if (localOnly) {
+                            // הצגה למשתמש זה בלבד
+                            addLocalMessage(displayMessage);
+                        } else {
+                            // שידור לכל המשתמשים
+                            sendMessage(displayMessage);
+                        }
+                        
+                        currentUI.push();
                     });
                 })
                 .exceptionally(ex -> {
                     String errorTimestamp = dateFormat.format(new Date());
                     currentUI.access(() -> {
-                        broadcastMessage("[" + errorTimestamp + "] " +  ": <b>Error decrypting message:</b> " + ex.getMessage());
+                        String errorMessage = "[" + errorTimestamp + "] " + sessionId + ": <b>Error decrypting message:</b> " + ex.getMessage();
+                        
+                        if (localOnly) {
+                            addLocalMessage(errorMessage);
+                        } else {
+                            sendMessage(errorMessage);
+                        }
+                        
+                        currentUI.push();
                     });
                     return null;
                 });
         });
-    }
-    
-    private void broadcastMessage(String content) {
-        // הוספה לאחסון
-        Chatstorage.addMessage(content);
-        
-        // שידור לכל הלקוחות המחוברים
-        GlobalMessageBroadcaster.broadcast(content);
     }
 
     private void addMessageToChat(String content) {
@@ -320,12 +380,12 @@ public class Chat extends VerticalLayout {
         messageDiv.getElement().setProperty("innerHTML", content); 
         messageDiv.getStyle().set("padding", "10px");
         messageDiv.getStyle().set("word-break", "break-word");
-        messageDiv.getStyle().set("margin-bottom", "5px"); // Add space between messages
-        messageDiv.getStyle().set("border-bottom", "1px solid #eee"); // Add divider between messages
+        messageDiv.getStyle().set("margin-bottom", "5px");
+        messageDiv.getStyle().set("border-bottom", "1px solid #eee");
 
         chatContainer.add(messageDiv); 
         
-        // גלילה לתחתית כדי להציג את ההודעה האחרונה
+        // גלילה לתחתית להצגת ההודעה האחרונה
         chatContainer.getElement().executeJs("this.scrollTop = this.scrollHeight");
     }
 
