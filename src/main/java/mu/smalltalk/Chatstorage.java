@@ -1,4 +1,4 @@
-package mu;
+package mu.smalltalk;
 
 
 

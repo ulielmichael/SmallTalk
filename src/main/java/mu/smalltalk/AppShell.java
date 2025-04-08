@@ -1,6 +1,6 @@
-package mu;
 
 
+package mu.smalltalk;
 
 import com.vaadin.flow.component.page.AppShellConfigurator;
 import com.vaadin.flow.component.page.Push;
@@ -9,5 +9,5 @@ import com.vaadin.flow.server.PWA;
 @Push
 @PWA(name = "SmallTalk", shortName = "ST")
 public class AppShell implements AppShellConfigurator {
+    // No additional code needed here
 }
-
