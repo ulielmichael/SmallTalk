@@ -40,7 +40,6 @@ public class Chat extends VerticalLayout {
     private String sessionId;
     private Registration broadcasterRegistration;
 
-    // Track the number of messages already seen - prevents duplicates
     private int lastSeenMessageCount = 0;
 
     public Chat() {
@@ -67,12 +66,10 @@ public class Chat extends VerticalLayout {
 
         add(new H2(sessionId), chatContainer, messageInput, mediaUpload);
 
-        // Load existing messages initially
         loadExistingMessages();
 
         setupMessageHandler();
 
-        // Setup cross-browser communication
         setupCrossBrowserCommunication();
     }
 
@@ -80,13 +77,10 @@ public class Chat extends VerticalLayout {
     protected void onAttach(AttachEvent attachEvent) {
         super.onAttach(attachEvent);
 
-        // Ensure we're registered with the broadcaster when UI is attached
         registerWithBroadcaster();
 
-        // Check for any new messages immediately
         checkForNewMessages();
 
-        // Set up polling as a fallback mechanism
         UI ui = attachEvent.getUI();
         if (ui != null) {
             ui.setPollInterval(1000); // 1-second polling as backup
@@ -97,7 +91,6 @@ public class Chat extends VerticalLayout {
     protected void onDetach(DetachEvent detachEvent) {
         super.onDetach(detachEvent);
 
-        // Clean up broadcaster registration
         if (broadcasterRegistration != null) {
             broadcasterRegistration.remove();
             broadcasterRegistration = null;
@@ -111,12 +104,10 @@ public class Chat extends VerticalLayout {
         }
         lastSeenMessageCount = existingMessages.size();
 
-        // Scroll to bottom after loading messages
         scrollToBottom();
     }
 
     private void setupMessageHandler() {
-        // Store UI and session reference before async operations
         UI currentUI = UI.getCurrent();
         VaadinSession currentSession = VaadinSession.getCurrent();
 
@@ -125,13 +116,10 @@ public class Chat extends VerticalLayout {
             String timestamp = dateFormat.format(new Date());
             System.out.println("Received message from " + sessionId + ": " + message);
 
-            // Send original message to all users
             sendMessage("[" + timestamp + "] " + sessionId + ": " + message);
 
-            // Encrypt and decrypt message only for sending user (local only)
             encryptionService.encryptStringAsync(message)
                     .thenAccept(encryptedMessage -> {
-                        // Check if UI is still valid and attached
                         if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
                             currentSession.lock();
                             try {
@@ -139,11 +127,9 @@ public class Chat extends VerticalLayout {
                                     String encTimestamp = dateFormat.format(new Date());
                                     String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
 
-                                    // Show encrypted message locally only
                                     addLocalMessage("[" + encTimestamp + "] " + sessionId + ": <b>Encrypted:</b> "
                                             + encodedMessage);
 
-                                    // Decrypt and display locally only
                                     decryptAndDisplayMessage(encodedMessage, true);
                                     currentUI.push();
                                 });
@@ -153,7 +139,6 @@ public class Chat extends VerticalLayout {
                         }
                     })
                     .exceptionally(ex -> {
-                        // Check if UI is still valid and attached
                         if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
                             currentSession.lock();
                             try {
@@ -175,8 +160,7 @@ public class Chat extends VerticalLayout {
     private void setupCrossBrowserCommunication() {
         UI ui = UI.getCurrent();
         if (ui != null) {
-            // Listen for localStorage events (triggered when localStorage changes in other
-            // tabs/windows)
+        
             ui.getPage().executeJs(
                     "window.addEventListener('storage', function(e) {" +
                             "   if (e.key === 'chat-update-trigger') {" +
@@ -187,8 +171,7 @@ public class Chat extends VerticalLayout {
         }
     }
 
-    // Called by JavaScript when localStorage changes (for same browser, different
-    // tabs)
+
     public void handleChatUpdate(String timestamp) {
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
@@ -199,7 +182,6 @@ public class Chat extends VerticalLayout {
         }
     }
 
-    // Check for new messages periodically
     public void checkForNewMessages() {
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
@@ -208,13 +190,11 @@ public class Chat extends VerticalLayout {
                 int currentMessageCount = allMessages.size();
 
                 if (currentMessageCount > lastSeenMessageCount) {
-                    // Add only new messages
                     for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
                         addMessageToChat(allMessages.get(i));
                     }
                     lastSeenMessageCount = currentMessageCount;
 
-                    // Scroll to bottom
                     scrollToBottom();
                     ui.push();
                 }
@@ -225,7 +205,6 @@ public class Chat extends VerticalLayout {
     private void registerWithBroadcaster() {
         UI ui = UI.getCurrent();
         if (ui != null) {
-            // Remove any existing registration
             if (broadcasterRegistration != null) {
                 broadcasterRegistration.remove();
                 broadcasterRegistration = null;
@@ -233,7 +212,6 @@ public class Chat extends VerticalLayout {
 
             System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
 
-            // Register this UI with the broadcaster
             broadcasterRegistration = GlobalMessageBroadcaster.register(ui, message -> {
                 if (ui.isAttached()) {
                     ui.access(() -> {
@@ -254,14 +232,12 @@ public class Chat extends VerticalLayout {
         }
     }
 
-    // Called when client reconnects
     public void ensureRegistration() {
         if (broadcasterRegistration == null || !GlobalMessageBroadcaster.isRegistered(UI.getCurrent())) {
             System.out.println("Re-registering with broadcaster after reconnection");
             registerWithBroadcaster();
         }
 
-        // Refresh chat immediately after reconnection
         checkForNewMessages();
     }
 
@@ -269,24 +245,20 @@ public class Chat extends VerticalLayout {
         VaadinSession session = VaadinSession.getCurrent();
         String uniqueId;
 
-        // Create new unique ID if needed
         if (session.getAttribute("sessionId") == null) {
             uniqueId = "User-" + UUID.randomUUID().toString().substring(0, 8);
             session.setAttribute("sessionId", uniqueId);
 
-            // Store in localStorage for persistence across browser sessions
             UI.getCurrent().getPage().executeJs(
                     "localStorage.setItem('chat-session-id', $0);", uniqueId);
         } else {
             uniqueId = session.getAttribute("sessionId").toString();
         }
 
-        // Check localStorage for existing ID (helps with browser refresh)
         UI.getCurrent().getPage().executeJs(
                 "return localStorage.getItem('chat-session-id');")
                 .then(String.class, result -> {
                     if (result != null && !result.isEmpty()) {
-                        // Update session with stored ID if it exists
                         session.setAttribute("sessionId", result);
                         updateSessionIdDisplay(result);
                         this.sessionId = result;
@@ -311,7 +283,6 @@ public class Chat extends VerticalLayout {
         upload.setMaxFileSize(16 * 1024 * 1024); // 16 MB
 
         upload.addSucceededListener(event -> {
-            // Store UI and session reference before async operations
             UI ui = UI.getCurrent();
             VaadinSession session = VaadinSession.getCurrent();
             
@@ -335,11 +306,9 @@ public class Chat extends VerticalLayout {
                             + audioHtml);
                 }
 
-                // Process encryption in background thread with proper session handling
                 final byte[] finalFileData = fileData;
                 encryptionService.encryptAsync(finalFileData)
                     .thenAccept(encryptedData -> {
-                        // Check if UI is still valid and attached
                         if (ui.isAttached() && !session.getSession().isNew()) {
                             session.lock();
                             try {
@@ -355,7 +324,6 @@ public class Chat extends VerticalLayout {
                         }
                     })
                     .exceptionally(ex -> {
-                        // Check if UI is still valid and attached
                         if (ui.isAttached() && !session.getSession().isNew()) {
                             session.lock();
                             try {
@@ -384,24 +352,19 @@ public class Chat extends VerticalLayout {
         });
     }
 
-    // Method to add local-only messages (no broadcasting)
     private void addLocalMessage(String content) {
         addMessageToChat(content);
     }
 
-    // Method to send message to all users
     private void sendMessage(String content) {
-        // Broadcast to all connected clients (prevents duplicates)
         GlobalMessageBroadcaster.broadcast(content);
     }
 
     private void scrollToBottom() {
-        // Scroll chat container to bottom to show latest messages
         chatContainer.getElement().executeJs("this.scrollTop = this.scrollHeight");
     }
 
     private void decryptAndDisplayMessage(String encodedMessage, boolean localOnly) {
-        // Store UI and session reference before async operations
         UI ui = UI.getCurrent();
         VaadinSession session = VaadinSession.getCurrent();
         
@@ -409,7 +372,6 @@ public class Chat extends VerticalLayout {
 
         encryptionService.decryptToStringAsync(encryptedMessage)
             .thenAccept(decryptedMessage -> {
-                // Check if UI is still valid and attached
                 if (ui.isAttached() && !session.getSession().isNew()) {
                     session.lock();
                     try {
@@ -419,10 +381,8 @@ public class Chat extends VerticalLayout {
                                     + decryptedMessage;
 
                             if (localOnly) {
-                                // Display to this user only
                                 addLocalMessage(displayMessage);
                             } else {
-                                // Broadcast to all users
                                 sendMessage(displayMessage);
                             }
 
@@ -434,7 +394,6 @@ public class Chat extends VerticalLayout {
                 }
             })
             .exceptionally(ex -> {
-                // Check if UI is still valid and attached
                 if (ui.isAttached() && !session.getSession().isNew()) {
                     session.lock();
                     try {
@@ -469,7 +428,6 @@ public class Chat extends VerticalLayout {
 
         chatContainer.add(messageDiv);
 
-        // Scroll to bottom to show latest message
         scrollToBottom();
     }
 
