@@ -1,66 +1,65 @@
 package mu.smalltalk;
 
-
-
-import com.vaadin.flow.component.Html;
-import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.dependency.CssImport;
 import com.vaadin.flow.component.html.*;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.upload.Upload;
-import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.Route;
+@CssImport("./styles/shared-styles.css")
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Base64;
 
 @Route("/")
 public class PageHome extends VerticalLayout {
     public PageHome() {
-        String img = """
-                 <img src="data:image/png;base64, " alt="" />
-                """;
-        H1 header = new H1("Welcome to the SmallTalk");
-        Html htmlimg = new Html(img);   
-        add(header, htmlimg);
+        // כותרת עליונה עם ניווט
+        HorizontalLayout navbar = new HorizontalLayout();
+        navbar.getStyle().set("background-color", "#f8f9fa");
+        navbar.getStyle().set("padding", "10px");
+        navbar.getStyle().set("border-bottom", "1px solid #ddd");
 
-        MemoryBuffer buffer = new MemoryBuffer();
-        Upload upload = new Upload(buffer);
+        Anchor homeLink = new Anchor("#", "Home");
+        Anchor aboutLink = new Anchor("#", "About");
+        Anchor advantagesLink = new Anchor("#", "Advantages");
 
-        upload.addSucceededListener(event -> {
-            String fileName = event.getFileName();
-            
-            try {
-                InputStream inputStream = buffer.getInputStream();
-                byte[] fileData = inputStream.readAllBytes();
-                String encodedString = Base64.getEncoder().encodeToString(fileData);
-                
-                try {
-                    Base64FileHandler.writeBase64ToFile(encodedString, fileName);
-                    add(new Paragraph("Base64 content saved to file successfully!"));
-                } catch (IOException e) {
-                    add(new Paragraph("Error saving base64 content: " + e.getMessage()));
-                }
-                
-                String img2 = "<img src='data:image/png;base64, " + encodedString + "' width='200px' />";
-                add(new Html(img2), new H2(fileName), new Hr());
-                
-            } catch (IOException e) {
-                add(new Paragraph("Error processing file: " + e.getMessage()));
-            }
-        });
+        navbar.add(homeLink, aboutLink, advantagesLink);
 
-        Button loadButton = new Button("Load Last Image", event -> {
-            try {
-                String lastFileName = "last_image"; 
-                String encodedString = Base64FileHandler.readBase64FromFile(lastFileName);
-                String img3 = "<img src='data:image/png;base64, " + encodedString + "' width='200px' />";
-                add(new Html(img3), new H2("Loaded from file"), new Hr());
-            } catch (IOException e) {
-                add(new Paragraph("Error loading base64 content: " + e.getMessage()));
-            }
-        });
+        // כותרת מרכזית
+        H1 title = new H1("The Basics of Central Bank Digital Currency");
+        title.getStyle().set("color", "white");
+        title.getStyle().set("font-size", "36px");
+        title.getStyle().set("text-align", "center");
 
-        add(upload, loadButton);
+        // גרפיקה מרכזית
+        Image graphic = new Image("https://example.com/graphic.png", "Digital Currency Graphic");
+        graphic.setWidth("80%");
+        graphic.getStyle().set("margin", "auto");
+
+        HorizontalLayout infoBoxes = new HorizontalLayout();
+        infoBoxes.getStyle().set("margin-top", "20px");
+
+        Div aboutBox = createInfoBox("About", "CBDC is a digital form of fiat currency issued and regulated by central banks.");
+        Div storingBox = createInfoBox("Storing", "CBDC can be stored in digital wallets and accessed using a mobile phone or other electronic device.");
+        Div functionsBox = createInfoBox("Functions", "CBDC functions like physical cash in digital form, enabling everyday transactions.");
+
+        infoBoxes.add(aboutBox, storingBox, functionsBox);
+
+        add(navbar, title, graphic, infoBoxes);
+    }
+
+    private Div createInfoBox(String title, String content) {
+        Div box = new Div();
+        box.getStyle().set("background-color", "#ffffff");
+        box.getStyle().set("padding", "15px");
+        box.getStyle().set("border-radius", "10px");
+        box.getStyle().set("box-shadow", "0 4px 6px rgba(0, 0, 0, 0.1)");
+        box.getStyle().set("width", "30%");
+
+        H3 boxTitle = new H3(title);
+        Paragraph boxContent = new Paragraph(content);
+
+        box.add(boxTitle, boxContent);
+        return box;
     }
 }
+
+
