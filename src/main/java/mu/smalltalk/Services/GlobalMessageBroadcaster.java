@@ -12,10 +12,8 @@ import io.netty.util.internal.shaded.org.jctools.queues.MessagePassingQueue.Cons
 import mu.smalltalk.Chatstorage;
 
 public class GlobalMessageBroadcaster {
-    // Using CopyOnWriteArrayList for thread safety during iteration
     private static final List<BroadcastListener> listeners = new CopyOnWriteArrayList<>();
     
-    // Class to store listener information
     private static class BroadcastListener {
         final UI ui;
         final Consumer<String> consumer;
@@ -56,14 +54,11 @@ public class GlobalMessageBroadcaster {
         // Store message in persistent storage
         Chatstorage.addMessage(message);
         
-        // Log for debugging
         System.out.println("Broadcasting message: " + message);
         System.out.println("Active listeners: " + listeners.size());
         
-        // Track listeners that need to be removed
         List<BroadcastListener> toRemove = new ArrayList<>();
         
-        // Broadcast to all connected clients
         for (BroadcastListener listener : listeners) {
             UI ui = listener.ui;
             Consumer<String> consumer = listener.consumer;
@@ -73,16 +68,13 @@ public class GlobalMessageBroadcaster {
                     System.out.println("Sending to UI: " + ui.getUIId());
                     ui.access(() -> {
                         try {
-                            // Deliver message to UI
                             consumer.accept(message);
-                            // Push update to browser immediately
                             ui.push();
                         } catch (Exception e) {
                             System.err.println("Error delivering message to UI " + ui.getUIId() + ": " + e.getMessage());
                         }
                     });
                     
-                    // Trigger localStorage event for cross-tab communication
                     ui.getPage().executeJs(
                         "localStorage.setItem('chat-update-trigger', Date.now().toString());"
                     );
@@ -96,7 +88,6 @@ public class GlobalMessageBroadcaster {
             }
         }
         
-        // Clean up detached listeners
         if (!toRemove.isEmpty()) {
             listeners.removeAll(toRemove);
             System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
