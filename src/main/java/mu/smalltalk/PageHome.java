@@ -1,7 +1,5 @@
 package mu.smalltalk;
 
-import org.springframework.stereotype.Component;
-
 import com.vaadin.flow.component.dependency.CssImport;
 import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -35,6 +33,8 @@ public class PageHome extends VerticalLayout {
         
         // Technology section
         Div technologySection = createTechnologySection();
+
+        // Div LoginSection = createloginSection();
         
         // Footer
         Div footer = createFooter();
@@ -70,13 +70,16 @@ public class PageHome extends VerticalLayout {
         
         Anchor homeLink = new Anchor("#", "Home");
         homeLink.getStyle().set("font-weight", "bold");
-        
+
+        Anchor loginLink = new Anchor("#login", "Login");
+        Anchor logoutLink = new Anchor("#logout", "Logout");
+        Anchor signupLink = new Anchor("#signup", "Signup");
         Anchor featuresLink = new Anchor("#features", "Features");
         Anchor securityLink = new Anchor("#security", "Security");
         Anchor techLink = new Anchor("#technology", "Technology");
         Anchor aboutLink = new Anchor("#about", "About");
         
-        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink);
+        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, loginLink, logoutLink, signupLink);
         
         // Style all links
         for (int i = 0; i < navLinks.getComponentCount(); i++) {
