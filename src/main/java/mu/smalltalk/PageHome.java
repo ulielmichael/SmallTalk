@@ -71,9 +71,9 @@ public class PageHome extends VerticalLayout {
         Anchor homeLink = new Anchor("#", "Home");
         homeLink.getStyle().set("font-weight", "bold");
 
-        Anchor loginLink = new Anchor("#login", "Login");
-        Anchor logoutLink = new Anchor("#logout", "Logout");
-        Anchor signupLink = new Anchor("#signup", "Signup");
+        Anchor loginLink = new Anchor("login", "Login");
+        Anchor logoutLink = new Anchor("logout", "Logout");
+        Anchor signupLink = new Anchor("signup", "Signup");
         Anchor featuresLink = new Anchor("#features", "Features");
         Anchor securityLink = new Anchor("#security", "Security");
         Anchor techLink = new Anchor("#technology", "Technology");

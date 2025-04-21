@@ -9,6 +9,7 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.messages.MessageInput;
 import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
@@ -41,6 +42,15 @@ public class Chat extends VerticalLayout {
     private Registration broadcasterRegistration;
 
     private int lastSeenMessageCount = 0;
+    
+    // Add a refresh button for the chat
+    private Button refreshButton;
+    
+    // Add theme toggle button
+    private Button themeToggleButton;
+    
+    // Track current theme
+    private boolean isDarkMode = false;
 
     public Chat() {
         sessionId = initializeSessionId();
@@ -53,24 +63,111 @@ public class Chat extends VerticalLayout {
 
         chatContainer.setWidthFull();
         chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
-        chatContainer.getStyle().set("background-color", "pink");
+        
+        // Default to light mode
+        applyLightMode();
+        
         chatContainer.getStyle().set("overflow-y", "auto");
-        chatContainer.getStyle().set("border", "1px solid black");
+        chatContainer.getStyle().set("border", "1px solid #ddd");
 
-        messageInput.getStyle().setBackgroundColor("gray");
         messageInput.setWidthFull();
 
         MemoryBuffer buffer = new MemoryBuffer();
         mediaUpload = new Upload(buffer);
         configureMediaUpload(mediaUpload, buffer);
+        
+        // Create refresh button
+        refreshButton = new Button("Refresh Chat");
+        refreshButton.addClickListener(e -> refreshChatHistory());
+        
+        // Create theme toggle button
+        themeToggleButton = new Button("DARK MODE");
+        themeToggleButton.getStyle().set("background-color", "#333");
+        themeToggleButton.getStyle().set("color", "white");
+        themeToggleButton.addClickListener(e -> toggleTheme());
+        
+        // Create header with title and theme toggle
+        HorizontalLayout header = new HorizontalLayout();
+        header.setWidthFull();
+        header.setJustifyContentMode(JustifyContentMode.BETWEEN);
+        header.add(new H2(sessionId), themeToggleButton);
+        
+        // Create action buttons layout
+        HorizontalLayout actionButtons = new HorizontalLayout();
+        actionButtons.add(refreshButton);
+        actionButtons.setSpacing(true);
 
-        add(new H2(sessionId), chatContainer, messageInput, mediaUpload);
+        add(header, chatContainer, messageInput, mediaUpload, actionButtons);
 
         loadExistingMessages();
 
         setupMessageHandler();
 
         setupCrossBrowserCommunication();
+        
+        // Load theme preference from local storage
+        loadThemePreference();
+    }
+
+    private void loadThemePreference() {
+        UI.getCurrent().getPage().executeJs(
+                "return localStorage.getItem('chat-theme-preference');")
+                .then(String.class, result -> {
+                    if ("dark".equals(result)) {
+                        isDarkMode = true;
+                        applyDarkMode();
+                        themeToggleButton.setText("LIGHT MODE");
+                        themeToggleButton.getStyle().set("background-color", "#f0f0f0");
+                        themeToggleButton.getStyle().set("color", "#333");
+                    }
+                });
+    }
+    
+    private void toggleTheme() {
+        isDarkMode = !isDarkMode;
+        
+        if (isDarkMode) {
+            applyDarkMode();
+            themeToggleButton.setText("LIGHT MODE");
+            themeToggleButton.getStyle().set("background-color", "#f0f0f0");
+            themeToggleButton.getStyle().set("color", "#333");
+        } else {
+            applyLightMode();
+            themeToggleButton.setText("DARK MODE");
+            themeToggleButton.getStyle().set("background-color", "#333");
+            themeToggleButton.getStyle().set("color", "white");
+        }
+        
+        // Save preference to local storage
+        UI.getCurrent().getPage().executeJs(
+                "localStorage.setItem('chat-theme-preference', $0);", isDarkMode ? "dark" : "light");
+                
+        // Reapply styles to messages
+        refreshChatHistory();
+    }
+    
+    private void applyDarkMode() {
+        // Apply dark theme to main components
+        getStyle().set("background-color", "#2c2c2c");
+        getStyle().set("color", "#f0f0f0");
+        
+        chatContainer.getStyle().set("background-color", "#1e1e1e");
+        chatContainer.getStyle().set("border", "1px solid #444");
+        
+        messageInput.getStyle().set("background-color", "#333");
+        messageInput.getStyle().set("color", "white");
+    }
+    
+    private void applyLightMode() {
+        // Apply light theme to main components
+        getStyle().set("background-color", "#f8f8f8");
+        getStyle().set("color", "#333");
+        
+        chatContainer.getStyle().set("background-color", "white");
+        chatContainer.getStyle().set("border", "1px solid #ddd");
+        
+        messageInput.getStyle().set("background-color", "white");
+        messageInput.getStyle().set("color", "#333");
     }
 
     @Override
@@ -83,7 +180,8 @@ public class Chat extends VerticalLayout {
 
         UI ui = attachEvent.getUI();
         if (ui != null) {
-            ui.setPollInterval(1000); // 1-second polling as backup
+            // Reduce poll interval for more responsive updates
+            ui.setPollInterval(500); 
         }
     }
 
@@ -99,12 +197,28 @@ public class Chat extends VerticalLayout {
 
     private void loadExistingMessages() {
         List<String> existingMessages = Chatstorage.getMessages();
+        
+        // Clear existing messages in the UI before loading
+        chatContainer.removeAll();
+        
         for (String message : existingMessages) {
             addMessageToChat(message);
         }
         lastSeenMessageCount = existingMessages.size();
 
         scrollToBottom();
+    }
+    
+    // Add a method to refresh the chat history
+    private void refreshChatHistory() {
+        UI ui = UI.getCurrent();
+        if (ui != null && ui.isAttached()) {
+            ui.access(() -> {
+                loadExistingMessages();
+                ui.push();
+                Notification.show("Chat refreshed", 2000, Notification.Position.BOTTOM_CENTER);
+            });
+        }
     }
 
     private void setupMessageHandler() {
@@ -116,8 +230,12 @@ public class Chat extends VerticalLayout {
             String timestamp = dateFormat.format(new Date());
             System.out.println("Received message from " + sessionId + ": " + message);
 
-            sendMessage("[" + timestamp + "] " + sessionId + ": " + message);
+            // Broadcast the message to all users
+            String formattedMessage = "[" + timestamp + "] " + sessionId + ": " + message;
+            sendMessage(formattedMessage);
 
+            // No need to add the message locally as it will come through the broadcaster
+            
             encryptionService.encryptStringAsync(message)
                     .thenAccept(encryptedMessage -> {
                         if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
@@ -127,10 +245,13 @@ public class Chat extends VerticalLayout {
                                     String encTimestamp = dateFormat.format(new Date());
                                     String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
 
-                                    addLocalMessage("[" + encTimestamp + "] " + sessionId + ": <b>Encrypted:</b> "
-                                            + encodedMessage);
+                                    String encryptedFormattedMessage = "[" + encTimestamp + "] " + sessionId + ": <b>Encrypted:</b> "
+                                            + encodedMessage;
+                                    
+                                    // Broadcast the encrypted message too
+                                    sendMessage(encryptedFormattedMessage);
 
-                                    decryptAndDisplayMessage(encodedMessage, true);
+                                    decryptAndDisplayMessage(encodedMessage, false);
                                     currentUI.push();
                                 });
                             } finally {
@@ -144,8 +265,12 @@ public class Chat extends VerticalLayout {
                             try {
                                 currentUI.access(() -> {
                                     String errorTimestamp = dateFormat.format(new Date());
-                                    addLocalMessage("[" + errorTimestamp + "] " + sessionId
-                                            + ": <b>Error encrypting message:</b> " + ex.getMessage());
+                                    String errorMessage = "[" + errorTimestamp + "] " + sessionId
+                                            + ": <b>Error encrypting message:</b> " + ex.getMessage();
+                                    
+                                    // Broadcast error messages too
+                                    sendMessage(errorMessage);
+                                    
                                     currentUI.push();
                                 });
                             } finally {
@@ -160,7 +285,6 @@ public class Chat extends VerticalLayout {
     private void setupCrossBrowserCommunication() {
         UI ui = UI.getCurrent();
         if (ui != null) {
-        
             ui.getPage().executeJs(
                     "window.addEventListener('storage', function(e) {" +
                             "   if (e.key === 'chat-update-trigger') {" +
@@ -168,9 +292,15 @@ public class Chat extends VerticalLayout {
                             "   }" +
                             "});",
                     getElement());
+                    
+            // Add a trigger to notify other browser windows when a message is sent
+            ui.getPage().executeJs(
+                    "function notifyOtherWindows() {" +
+                    "   localStorage.setItem('chat-update-trigger', Date.now().toString());" +
+                    "}" +
+                    "window.notifyOtherWindows = notifyOtherWindows;");
         }
     }
-
 
     public void handleChatUpdate(String timestamp) {
         UI ui = UI.getCurrent();
@@ -190,12 +320,17 @@ public class Chat extends VerticalLayout {
                 int currentMessageCount = allMessages.size();
 
                 if (currentMessageCount > lastSeenMessageCount) {
+                    // Only add new messages
                     for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
                         addMessageToChat(allMessages.get(i));
                     }
                     lastSeenMessageCount = currentMessageCount;
 
                     scrollToBottom();
+                    
+                    // Notify other browser windows
+                    ui.getPage().executeJs("window.notifyOtherWindows();");
+                    
                     ui.push();
                 }
             });
@@ -216,6 +351,10 @@ public class Chat extends VerticalLayout {
                 if (ui.isAttached()) {
                     ui.access(() -> {
                         addMessageToChat(message);
+                        
+                        // Update the last seen count after receiving a message
+                        lastSeenMessageCount = Chatstorage.getMessages().size();
+                        
                         scrollToBottom();
                         ui.push();
                     });
@@ -314,8 +453,12 @@ public class Chat extends VerticalLayout {
                             try {
                                 ui.access(() -> {
                                     String encTimestamp = dateFormat.format(new Date());
-                                    addLocalMessage("[" + encTimestamp + "] " + sessionId + ": ✅ File " + fileName
-                                            + " encrypted successfully");
+                                    String successMessage = "[" + encTimestamp + "] " + sessionId + ": ✅ File " + fileName
+                                            + " encrypted successfully";
+                                    
+                                    // Broadcast the success message
+                                    sendMessage(successMessage);
+                                    
                                     ui.push();
                                 });
                             } finally {
@@ -329,8 +472,12 @@ public class Chat extends VerticalLayout {
                             try {
                                 ui.access(() -> {
                                     String errorTimestamp = dateFormat.format(new Date());
-                                    addLocalMessage("[" + errorTimestamp + "] " + sessionId
-                                            + ": ❌ Error encrypting file: " + ex.getMessage());
+                                    String errorMessage = "[" + errorTimestamp + "] " + sessionId
+                                            + ": ❌ Error encrypting file: " + ex.getMessage();
+                                    
+                                    // Broadcast the error message
+                                    sendMessage(errorMessage);
+                                    
                                     ui.push();
                                 });
                             } finally {
@@ -352,12 +499,24 @@ public class Chat extends VerticalLayout {
         });
     }
 
+    // We're now broadcasting all messages, so this method is simplified
     private void addLocalMessage(String content) {
-        addMessageToChat(content);
+        // Instead of a separate method, we'll use sendMessage to broadcast all messages
+        sendMessage(content);
     }
 
     private void sendMessage(String content) {
+        // This broadcasts the message to all connected clients
         GlobalMessageBroadcaster.broadcast(content);
+        
+        // Trigger the local UI to refresh immediately without waiting for the broadcast
+        UI ui = UI.getCurrent();
+        if (ui != null && ui.isAttached()) {
+            ui.access(() -> {
+                checkForNewMessages();
+                ui.push();
+            });
+        }
     }
 
     private void scrollToBottom() {
@@ -380,11 +539,8 @@ public class Chat extends VerticalLayout {
                             String displayMessage = "[" + decTimestamp + "] " + sessionId + ": <b>Decrypted:</b> "
                                     + decryptedMessage;
 
-                            if (localOnly) {
-                                addLocalMessage(displayMessage);
-                            } else {
-                                sendMessage(displayMessage);
-                            }
+                            // Always broadcast the decrypted message
+                            sendMessage(displayMessage);
 
                             ui.push();
                         });
@@ -402,11 +558,8 @@ public class Chat extends VerticalLayout {
                             String errorMessage = "[" + errorTimestamp + "] " + sessionId
                                     + ": <b>Error decrypting message:</b> " + ex.getMessage();
 
-                            if (localOnly) {
-                                addLocalMessage(errorMessage);
-                            } else {
-                                sendMessage(errorMessage);
-                            }
+                            // Always broadcast error messages
+                            sendMessage(errorMessage);
 
                             ui.push();
                         });
@@ -424,7 +577,26 @@ public class Chat extends VerticalLayout {
         messageDiv.getStyle().set("padding", "10px");
         messageDiv.getStyle().set("word-break", "break-word");
         messageDiv.getStyle().set("margin-bottom", "5px");
-        messageDiv.getStyle().set("border-bottom", "1px solid #eee");
+        messageDiv.getStyle().set("border-bottom", "1px solid " + (isDarkMode ? "#444" : "#eee"));
+        
+        // Add visual distinction for own messages with theme-aware styling
+        if (content.contains(sessionId)) {
+            if (isDarkMode) {
+                messageDiv.getStyle().set("background-color", "#2d3748");
+                messageDiv.getStyle().set("border-left", "3px solid #63b3ed");
+            } else {
+                messageDiv.getStyle().set("background-color", "#ebf8ff");
+                messageDiv.getStyle().set("border-left", "3px solid #3182ce");
+            }
+        } else {
+            if (isDarkMode) {
+                messageDiv.getStyle().set("background-color", "#2a2f3a");
+                messageDiv.getStyle().set("border-left", "3px solid #718096");
+            } else {
+                messageDiv.getStyle().set("background-color", "#f7fafc");
+                messageDiv.getStyle().set("border-left", "3px solid #a0aec0");
+            }
+        }
 
         chatContainer.add(messageDiv);
 
