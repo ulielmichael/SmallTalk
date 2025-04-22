@@ -1,12 +1,12 @@
-// package mu.smalltalk.repositoriy;
+package mu.smalltalk.repositoriy;
 
-// import mu.smalltalk.User;
-// import org.springframework.data.mongodb.repository.MongoRepository;
-// import org.springframework.stereotype.Repository;
-// import java.util.Optional;
+import org.springframework.data.mongodb.repository.MongoRepository;
 
-// @Repository
-// public interface UserRepository extends MongoRepository<User, String> {
-//     Optional<User> findByEmail(String email);
-//     boolean existsByEmail(String email);
-// }
+import mu.smalltalk.User;
+
+import java.util.Optional;
+
+public interface UserRepository extends MongoRepository<User, String> {
+    Optional<User> findByEmail(String email);
+    boolean existsByEmail(String email);
+}

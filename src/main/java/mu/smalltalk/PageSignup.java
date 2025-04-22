@@ -1,12 +1,13 @@
 package mu.smalltalk;
 
-
-
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.dependency.CssImport;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.EmailField;
@@ -14,12 +15,22 @@ import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import mu.smalltalk.Services.UserService;
+// Make sure User class is properly imported
+import mu.smalltalk.User;
 
 @CssImport("./styles/shared-styles.css")
 @Route("/signup")
 public class PageSignup extends VerticalLayout {
 
-    public PageSignup() {
+    private final UserService userService;
+
+    @Autowired
+    public PageSignup(UserService userService) {
+        this.userService = userService;
+        
         // Set basic page properties
         addClassName("signup-page");
         setSpacing(false);
@@ -184,6 +195,50 @@ public class PageSignup extends VerticalLayout {
             .set("cursor", "pointer");
         signupButton.setWidthFull();
         signupButton.setHeight("48px");
+        
+        // Add improved signup button click handler with better debugging
+        signupButton.addClickListener(event -> {
+            try {
+                String fullName = fullNameField.getValue();
+                String email = emailField.getValue();
+                String password = passwordField.getValue();
+                
+                // Debug logging - step 1
+                System.out.println("Attempting registration with values: Name=" + fullName + ", Email=" + email);
+                
+                // Validate inputs
+                if (fullName.isEmpty() || email.isEmpty() || password.isEmpty()) {
+                    Notification.show("Please fill in all fields", 3000, Notification.Position.TOP_CENTER)
+                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                    return;
+                }
+                
+                // Debug logging - step 2
+                System.out.println("Input validation passed, calling userService.registerUser()");
+                
+                // Call the service to register the user
+                User registeredUser = userService.registerUser(fullName, email, password);
+                
+                // Debug logging - step 3
+                System.out.println("User registered successfully: " + registeredUser);
+                
+                // Show success notification
+                Notification.show("Account created successfully!", 3000, Notification.Position.TOP_CENTER)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                    
+                // Redirect to login page
+                UI.getCurrent().navigate("/login");
+            } catch (Exception e) {
+                // Enhanced error logging
+                System.err.println("Registration failed with exception: " + e.getClass().getName());
+                System.err.println("Error message: " + e.getMessage());
+                e.printStackTrace();
+                
+                // Show error notification
+                Notification.show("Registration failed: " + e.getMessage(), 3000, Notification.Position.TOP_CENTER)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            }
+        });
         
         // Login link
         Div loginLinkContainer = new Div();

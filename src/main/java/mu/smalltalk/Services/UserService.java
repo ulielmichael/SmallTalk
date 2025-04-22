@@ -1,33 +1,98 @@
-// package mu.smalltalk.Services;
+package mu.smalltalk.Services;
 
-// import mu.smalltalk.User;
-// import mu.smalltalk.repository.UserRepository;
-// import org.springframework.beans.factory.annotation.Autowired;
-// import org.springframework.security.crypto.password.PasswordEncoder;
-// import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
 
-// @Service
-// public class UserService {
-    
-//     private final UserService userRepository;
-//     private final PasswordEncoder passwordEncoder;
-    
-//     @Autowired
-//     public UserService(UserService userRepository, PasswordEncoder passwordEncoder) {
-//         this.userRepository = userRepository;
-//         this.passwordEncoder = passwordEncoder;
-//     }
-    
-//     public User registerUser(String fullName, String email, String password) {
-//         // Check if user already exists
-//         if (userRepository.existsByEmail(email)) {
-//             throw new RuntimeException("Email already in use");
-//         }
+import mu.smalltalk.User;
+import mu.smalltalk.repositoriy.UserRepository;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
+    private User currentUser;
+
+    @Autowired
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = new BCryptPasswordEncoder();
+        System.out.println("UserService initialized with repository: " + userRepository);
+    }
+
+    public User registerUser(String fullName, String email, String password) {
+        // Log debug information
+        System.out.println("Registering user: " + fullName + " with email: " + email);
         
-//         // Create new user with encoded password
-//         User newUser = new User(fullName, email, passwordEncoder.encode(password));
+        // Check if email already exists
+        if (userRepository.existsByEmail(email)) {
+            System.out.println("Registration failed: Email already exists: " + email);
+            throw new RuntimeException("Email already registered");
+        }
+
+        try {
+            // Hash the password
+            String hashedPassword = passwordEncoder.encode(password);
+            System.out.println("Password hashed successfully");
+
+            // Create a new user
+            User user = new User(fullName, email, hashedPassword);
+            System.out.println("User object created: " + user);
+            
+            // Save the user to the database
+            User savedUser = userRepository.save(user);
+            System.out.println("User saved successfully with ID: " + savedUser.getId());
+            
+            return savedUser;
+        } catch (Exception e) {
+            System.err.println("Error during user registration: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Registration failed: " + e.getMessage(), e);
+        }
+    }
+
+    public User authenticateUser(String email, String password) {
+        System.out.println("Authenticating user with email: " + email);
         
-//         // Save to database
-//         return userRepository.save(newUser);
-//     }
-// }
+        Optional<User> userOptional = userRepository.findByEmail(email);
+        
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            System.out.println("User found: " + user);
+            
+            // Check if password matches
+            if (passwordEncoder.matches(password, user.getPassword())) {
+                System.out.println("Password matched for user: " + email);
+                
+                // Update last login time
+                user.setLastLogin(LocalDateTime.now());
+                userRepository.save(user);
+                
+                // Set the current authenticated user
+                this.currentUser = user;
+                return user;
+            } else {
+                System.out.println("Password did not match for user: " + email);
+            }
+        } else {
+            System.out.println("No user found with email: " + email);
+        }
+        
+        throw new RuntimeException("Invalid email or password");
+    }
+
+    public User getCurrentUser() {
+        return currentUser;
+    }
+
+    public void setCurrentUser(User user) {
+        this.currentUser = user;
+    }
+
+    public void logout() {
+        this.currentUser = null;
+    }
+}

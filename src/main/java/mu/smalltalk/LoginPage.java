@@ -1,12 +1,12 @@
 package mu.smalltalk;
 
-
-
 import com.vaadin.flow.component.dependency.CssImport;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.EmailField;
@@ -14,11 +14,23 @@ import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 
+import mu.smalltalk.Services.UserService;
+
+import org.springframework.beans.factory.annotation.Autowired;
+
 @CssImport("./styles/shared-styles.css")
 @Route("/login")
 public class LoginPage extends VerticalLayout {
 
-    public LoginPage() {
+    private final UserService userService;
+    
+    private EmailField emailField;
+    private PasswordField passwordField;
+
+    @Autowired
+    public LoginPage(UserService userService) {
+        this.userService = userService;
+        
         // Set basic page properties
         addClassName("login-page");
         setSpacing(false);
@@ -113,10 +125,12 @@ public class LoginPage extends VerticalLayout {
             .set("margin", "0 0 8px 0")
             .set("font-weight", "500");
         
-        EmailField emailField = new EmailField();
+        emailField = new EmailField();
         emailField.setWidthFull();
         emailField.setPlaceholder("you@example.com");
         emailField.setPrefixComponent(VaadinIcon.ENVELOPE.create());
+        emailField.setRequired(true);
+        emailField.setErrorMessage("Please enter a valid email address");
         
         emailFieldWrapper.add(emailLabel, emailField);
         
@@ -130,10 +144,12 @@ public class LoginPage extends VerticalLayout {
             .set("margin", "0 0 8px 0")
             .set("font-weight", "500");
         
-        PasswordField passwordField = new PasswordField();
+        passwordField = new PasswordField();
         passwordField.setWidthFull();
         passwordField.setPlaceholder("••••••••");
         passwordField.setPrefixComponent(VaadinIcon.LOCK.create());
+        passwordField.setRequired(true);
+        passwordField.setErrorMessage("Password is required");
         
         passwordFieldWrapper.add(passwordLabel, passwordField);
         
@@ -147,6 +163,35 @@ public class LoginPage extends VerticalLayout {
             .set("cursor", "pointer");
         loginButton.setWidthFull();
         loginButton.setHeight("48px");
+        
+        // Add login button click handler
+        loginButton.addClickListener(e -> {
+            try {
+                // Validate form
+                if (!validateForm()) {
+                    return;
+                }
+                
+                // Try to authenticate the user
+                User authenticatedUser = userService.authenticateUser(
+                    emailField.getValue(), 
+                    passwordField.getValue()
+                );
+                
+                // If successful, navigate to chat page
+                Notification.show("Login successful! Welcome, " + authenticatedUser.getFullName(), 
+                    3000, Notification.Position.TOP_CENTER)
+                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                
+                getUI().ifPresent(ui -> ui.navigate(Chat.class));
+                
+            } catch (Exception ex) {
+                // Show error message
+                Notification.show("Login failed: " + ex.getMessage(), 
+                    3000, Notification.Position.TOP_CENTER)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            }
+        });
         
         // Sign up link
         Div signupLinkContainer = new Div();
@@ -172,6 +217,22 @@ public class LoginPage extends VerticalLayout {
         
         column.add(formContainer);
         return column;
+    }
+    
+    private boolean validateForm() {
+        boolean isValid = true;
+        
+        if (emailField.isEmpty() || !emailField.isInvalid()) {
+            emailField.setInvalid(true);
+            isValid = false;
+        }
+        
+        if (passwordField.isEmpty()) {
+            passwordField.setInvalid(true);
+            isValid = false;
+        }
+        
+        return isValid;
     }
     
     private VerticalLayout createImageColumn() {
