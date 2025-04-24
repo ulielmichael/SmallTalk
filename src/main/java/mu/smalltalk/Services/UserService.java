@@ -15,14 +15,14 @@ public class UserService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private User currentUser;
-
+    
     @Autowired
     public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = new BCryptPasswordEncoder();
         System.out.println("UserService initialized with repository: " + userRepository);
     }
-
+    
     public User registerUser(String fullName, String email, String password) {
         // Log debug information
         System.out.println("Registering user: " + fullName + " with email: " + email);
@@ -32,12 +32,12 @@ public class UserService {
             System.out.println("Registration failed: Email already exists: " + email);
             throw new RuntimeException("Email already registered");
         }
-
+        
         try {
             // Hash the password
             String hashedPassword = passwordEncoder.encode(password);
             System.out.println("Password hashed successfully");
-
+            
             // Create a new user
             User user = new User(fullName, email, hashedPassword);
             System.out.println("User object created: " + user);
@@ -53,7 +53,7 @@ public class UserService {
             throw new RuntimeException("Registration failed: " + e.getMessage(), e);
         }
     }
-
+    
     public User authenticateUser(String email, String password) {
         System.out.println("Authenticating user with email: " + email);
         
@@ -83,16 +83,35 @@ public class UserService {
         
         throw new RuntimeException("Invalid email or password");
     }
-
+    
     public User getCurrentUser() {
         return currentUser;
     }
-
+    
     public void setCurrentUser(User user) {
         this.currentUser = user;
     }
-
+    
     public void logout() {
         this.currentUser = null;
+    }
+    
+    // Method to update user's profile picture
+    public void updateProfilePicture(User user) {
+        if (user != null && user.getId() != null) {
+            userRepository.save(user);
+        }
+    }
+    
+    // Alternative method if you prefer to pass ID and image data separately
+    public void updateProfilePicture(String userId, String profilePicData) {
+        if (userId != null) {
+            Optional<User> userOptional = userRepository.findById(userId);
+            if (userOptional.isPresent()) {
+                User user = userOptional.get();
+                user.setProfilePic(profilePicData);
+                userRepository.save(user);
+            }
+        }
     }
 }

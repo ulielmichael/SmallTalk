@@ -20,17 +20,26 @@ public class User {
     private LocalDateTime createdAt;
     
     private LocalDateTime lastLogin;
+    private String profilePic;
     
     // Default constructor
     public User() {
         this.createdAt = LocalDateTime.now();
     }
     
+    public String getProfilePic() {
+        return profilePic;
+    }
+
+    public void setProfilePic(String profilePic) {
+        this.profilePic = profilePic;
+    }
+
     // Constructor with fields
-    public User(String fullName, String email, String password) {
+    public User(String fullName, String email, String hashedPassword) {
         this.fullName = fullName;
         this.email = email;
-        this.password = password;
+        this.password = hashedPassword;
         this.createdAt = LocalDateTime.now();
     }
     
@@ -92,5 +101,18 @@ public class User {
                 ", createdAt=" + createdAt +
                 ", lastLogin=" + lastLogin +
                 '}';
+    }
+
+  
+
+   
+  
+    // במקום המתודות הקיימות updateLastActivity, getUsername שמנסות לזרוק חריגות
+    public void updateLastActivity() {
+        this.lastLogin = LocalDateTime.now();
+    }
+
+    public String getUsername() {
+        return this.email; // במקרה שלך האימייל משמש כשם משתמש
     }
 }

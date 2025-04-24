@@ -12,7 +12,7 @@ public class MongoConfig {
     @Bean
     public MongoDatabaseFactory mongoDatabaseFactory() {
         String username = "ulilelmichael";
-        String password = encodeURIComponent("Michaelis2k"); // או הסיסמה המדויקת עם קידוד
+        String password = encodeURIComponent("Michaelis2k"); 
         return new SimpleMongoClientDatabaseFactory(
             "mongodb+srv://" + username + ":" + password + "@cluster0.hfb0biz.mongodb.net/smalltalk?retryWrites=true&w=majority&appName=Cluster0"
         );
@@ -31,4 +31,5 @@ public class MongoConfig {
             return s;
         }
     }
+    
 }    

@@ -11,6 +11,7 @@ import com.vaadin.flow.component.messages.MessageInput;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.Route;
@@ -96,8 +97,29 @@ public class Chat extends VerticalLayout {
         HorizontalLayout actionButtons = new HorizontalLayout();
         actionButtons.add(refreshButton);
         actionButtons.setSpacing(true);
+        
+        // Create toolbar with home and logout buttons
+        HorizontalLayout toolbar = new HorizontalLayout();
+        toolbar.setWidthFull();
+        toolbar.setJustifyContentMode(JustifyContentMode.END);
 
-        add(header, chatContainer, messageInput, mediaUpload, actionButtons);
+        Button homeButton = new Button("Home");
+        homeButton.addClickListener(e -> UI.getCurrent().navigate(""));  // Navigate to home page
+
+        Button logoutButton = new Button("Logout");
+        logoutButton.addClickListener(e -> {
+            // Clear user session data
+            VaadinSession.getCurrent().getSession().invalidate();
+            // Clear local storage 
+            UI.getCurrent().getPage().executeJs(
+                "localStorage.removeItem('chat-session-id');");
+            // Navigate back to login/home page
+            UI.getCurrent().navigate("");
+        });
+
+        toolbar.add(homeButton, logoutButton);
+
+        add(toolbar, header, chatContainer, messageInput, mediaUpload, actionButtons);
 
         loadExistingMessages();
 
@@ -384,25 +406,41 @@ public class Chat extends VerticalLayout {
         VaadinSession session = VaadinSession.getCurrent();
         String uniqueId;
 
+        // First check if we have a username in session
+        if (session.getAttribute("username") != null) {
+            uniqueId = session.getAttribute("username").toString();
+            session.setAttribute("sessionId", uniqueId);
+            
+            // Also store in localStorage
+            UI.getCurrent().getPage().executeJs(
+                    "localStorage.setItem('chat-session-id', $0);", uniqueId);
+            
+            return uniqueId;
+        }
+        
+        // Then check localStorage
+        UI.getCurrent().getPage().executeJs(
+                "return localStorage.getItem('chat-session-id');")
+                .then(String.class, result -> {
+                    if (result != null && !result.isEmpty()) {
+                        session.setAttribute("sessionId", result);
+                        session.setAttribute("username", result); // Store as username too
+                        updateSessionIdDisplay(result);
+                        this.sessionId = result;
+                    }
+                });
+        
+        // If still no ID, generate a new one
         if (session.getAttribute("sessionId") == null) {
             uniqueId = "User-" + UUID.randomUUID().toString().substring(0, 8);
             session.setAttribute("sessionId", uniqueId);
+            // Don't set username here since it's auto-generated
 
             UI.getCurrent().getPage().executeJs(
                     "localStorage.setItem('chat-session-id', $0);", uniqueId);
         } else {
             uniqueId = session.getAttribute("sessionId").toString();
         }
-
-        UI.getCurrent().getPage().executeJs(
-                "return localStorage.getItem('chat-session-id');")
-                .then(String.class, result -> {
-                    if (result != null && !result.isEmpty()) {
-                        session.setAttribute("sessionId", result);
-                        updateSessionIdDisplay(result);
-                        this.sessionId = result;
-                    }
-                });
 
         return uniqueId;
     }
