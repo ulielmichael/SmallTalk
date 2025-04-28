@@ -405,54 +405,62 @@ public class Chat extends VerticalLayout {
     private String initializeSessionId() {
         VaadinSession session = VaadinSession.getCurrent();
         String uniqueId;
-
-        // First check if we have a username in session
+    
+        // בודק קודם אם יש לנו שם משתמש ב-session
         if (session.getAttribute("username") != null) {
             uniqueId = session.getAttribute("username").toString();
             session.setAttribute("sessionId", uniqueId);
             
-            // Also store in localStorage
+            // שומר ב-localStorage
             UI.getCurrent().getPage().executeJs(
                     "localStorage.setItem('chat-session-id', $0);", uniqueId);
             
+            // מעדכן מיד את תצוגת ממשק המשתמש
+            updateSessionIdDisplay(uniqueId);
+            
             return uniqueId;
         }
-        
-        // Then check localStorage
         UI.getCurrent().getPage().executeJs(
-                "return localStorage.getItem('chat-session-id');")
-                .then(String.class, result -> {
-                    if (result != null && !result.isEmpty()) {
-                        session.setAttribute("sessionId", result);
-                        session.setAttribute("username", result); // Store as username too
-                        updateSessionIdDisplay(result);
-                        this.sessionId = result;
-                    }
-                });
+            "return localStorage.getItem('chat-session-id');")
+            .then(String.class, result -> {
+                if (result != null && !result.isEmpty()) {
+                    // Save to session for this browser tab/session
+                    session.setAttribute("sessionId", result);
+                    session.setAttribute("username", result); // Store as username too
+                    
+                    // Update display immediately
+                    updateSessionIdDisplay(result);
+                    this.sessionId = result;
+                }
+            });
+            if (session.getAttribute("sessionId") == null) {
+                uniqueId = "User-" + UUID.randomUUID().toString().substring(0, 8);
+                session.setAttribute("sessionId", uniqueId);
+                // Don't set username here since it's auto-generated
         
-        // If still no ID, generate a new one
-        if (session.getAttribute("sessionId") == null) {
-            uniqueId = "User-" + UUID.randomUUID().toString().substring(0, 8);
-            session.setAttribute("sessionId", uniqueId);
-            // Don't set username here since it's auto-generated
-
-            UI.getCurrent().getPage().executeJs(
-                    "localStorage.setItem('chat-session-id', $0);", uniqueId);
-        } else {
-            uniqueId = session.getAttribute("sessionId").toString();
+                UI.getCurrent().getPage().executeJs(
+                        "localStorage.setItem('chat-session-id', $0);", uniqueId);
+                
+                return uniqueId;
+            } else {
+                uniqueId = session.getAttribute("sessionId").toString();
+            }
+        
+            return uniqueId;
         }
 
-        return uniqueId;
-    }
-
-    private void updateSessionIdDisplay(String id) {
-        getChildren().forEach(component -> {
-            if (component instanceof H2) {
-                ((H2) component).setText(id);
-            }
-        });
-    }
-
+        private void updateSessionIdDisplay(String id) {
+            getChildren().forEach(component -> {
+                if (component instanceof HorizontalLayout) {
+                    HorizontalLayout layout = (HorizontalLayout) component;
+                    layout.getChildren().forEach(child -> {
+                        if (child instanceof H2) {
+                            ((H2) child).setText(id);
+                        }
+                    });
+                }
+            });
+        }
     private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
         Button uploadButton = new Button("Upload");
         upload.setUploadButton(uploadButton);
@@ -609,37 +617,38 @@ public class Chat extends VerticalLayout {
             });
     }
 
-    private void addMessageToChat(String content) {
-        Div messageDiv = new Div();
-        messageDiv.getElement().setProperty("innerHTML", content);
-        messageDiv.getStyle().set("padding", "10px");
-        messageDiv.getStyle().set("word-break", "break-word");
-        messageDiv.getStyle().set("margin-bottom", "5px");
-        messageDiv.getStyle().set("border-bottom", "1px solid " + (isDarkMode ? "#444" : "#eee"));
-        
-        // Add visual distinction for own messages with theme-aware styling
-        if (content.contains(sessionId)) {
-            if (isDarkMode) {
-                messageDiv.getStyle().set("background-color", "#2d3748");
-                messageDiv.getStyle().set("border-left", "3px solid #63b3ed");
-            } else {
-                messageDiv.getStyle().set("background-color", "#ebf8ff");
-                messageDiv.getStyle().set("border-left", "3px solid #3182ce");
-            }
+   private void addMessageToChat(String content) {
+    Div messageDiv = new Div();
+    messageDiv.getElement().setProperty("innerHTML", content);
+    messageDiv.getStyle().set("padding", "10px");
+    messageDiv.getStyle().set("word-break", "break-word");
+    messageDiv.getStyle().set("margin-bottom", "5px");
+    messageDiv.getStyle().set("border-bottom", "1px solid " + (isDarkMode ? "#444" : "#eee"));
+    
+    // חשוב: לא לסנן הודעות לפי sessionId, רק לעצב אותן בצורה שונה
+    if (content.contains(sessionId)) {
+        // עיצוב להודעות שלך
+        if (isDarkMode) {
+            messageDiv.getStyle().set("background-color", "#2d3748");
+            messageDiv.getStyle().set("border-left", "3px solid #63b3ed");
         } else {
-            if (isDarkMode) {
-                messageDiv.getStyle().set("background-color", "#2a2f3a");
-                messageDiv.getStyle().set("border-left", "3px solid #718096");
-            } else {
-                messageDiv.getStyle().set("background-color", "#f7fafc");
-                messageDiv.getStyle().set("border-left", "3px solid #a0aec0");
-            }
+            messageDiv.getStyle().set("background-color", "#ebf8ff");
+            messageDiv.getStyle().set("border-left", "3px solid #3182ce");
         }
-
-        chatContainer.add(messageDiv);
-
-        scrollToBottom();
+    } else {
+        // עיצוב להודעות של אחרים
+        if (isDarkMode) {
+            messageDiv.getStyle().set("background-color", "#2a2f3a");
+            messageDiv.getStyle().set("border-left", "3px solid #718096");
+        } else {
+            messageDiv.getStyle().set("background-color", "#f7fafc");
+            messageDiv.getStyle().set("border-left", "3px solid #a0aec0");
+        }
     }
+
+    chatContainer.add(messageDiv);
+    scrollToBottom();
+}
 
     private Aes256 initializeEncryption() {
         try {

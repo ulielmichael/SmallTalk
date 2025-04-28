@@ -1,6 +1,7 @@
 package mu.smalltalk;
 
 import com.vaadin.flow.component.dependency.CssImport;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.icon.VaadinIcon;
@@ -13,6 +14,7 @@ import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
+import com.vaadin.flow.server.VaadinSession;
 
 import mu.smalltalk.Services.UserService;
 
@@ -178,8 +180,28 @@ public class LoginPage extends VerticalLayout {
                     passwordField.getValue()
                 );
                 
+                // IMPORTANT FIX: Store the username in session
+                VaadinSession.getCurrent().setAttribute("username", authenticatedUser.getUsername());
+                // Also store fullName if available
+                if (authenticatedUser.getFullName() != null && !authenticatedUser.getFullName().isEmpty()) {
+                    VaadinSession.getCurrent().setAttribute("username", authenticatedUser.getFullName());
+                }
+                
+                // Clear any previous sessionId to ensure the new username is used
+                VaadinSession.getCurrent().setAttribute("sessionId", null);
+                
+                // Store in localStorage for persistence across page refreshes
+                UI.getCurrent().getPage().executeJs(
+                    "localStorage.setItem('chat-session-id', $0);", 
+                    authenticatedUser.getFullName() != null ? 
+                        authenticatedUser.getFullName() : 
+                        authenticatedUser.getUsername());
+                
                 // If successful, navigate to chat page
-                Notification.show("Login successful! Welcome, " + authenticatedUser.getFullName(), 
+                Notification.show("Login successful! Welcome, " + 
+                    (authenticatedUser.getFullName() != null ? 
+                        authenticatedUser.getFullName() : 
+                        authenticatedUser.getUsername()), 
                     3000, Notification.Position.TOP_CENTER)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                 

@@ -93,6 +93,7 @@ public class GlobalMessageBroadcaster {
             System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
         }
     }
+        
     
     /**
      * Check if a UI is currently registered

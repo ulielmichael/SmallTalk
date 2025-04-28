@@ -25,14 +25,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 
 @Route("profile")
-@PageTitle("פרופיל משתמש")
-public class ProfileView extends VerticalLayout {
+@PageTitle("User Profile")
+public class ProfilPage extends VerticalLayout {
     
     private final UserService userService;
     private User currentUser;
     private Image profileImage;
     
-    public ProfileView(UserService userService) {
+    public ProfilPage(UserService userService) {
         this.userService = userService;
         this.currentUser = userService.getCurrentUser();
         
@@ -40,8 +40,8 @@ public class ProfileView extends VerticalLayout {
         setSizeFull();
         setAlignItems(FlexComponent.Alignment.CENTER);
         
-        // Set RTL direction for Hebrew support
-        getElement().setAttribute("dir", "rtl");
+        // Set LTR direction for English support
+        getElement().setAttribute("dir", "ltr");
         
         Div contentContainer = new Div();
         contentContainer.addClassName("content-container");
@@ -54,10 +54,10 @@ public class ProfileView extends VerticalLayout {
             .set("box-shadow", "var(--lumo-box-shadow-s)");
         
         // Header section
-        H1 title = new H1("פרופיל");
+        H1 title = new H1("Profile");
         title.getStyle().set("margin-bottom", "0");
         
-        Paragraph subtitle = new Paragraph("פרטי המשתמש שלך");
+        Paragraph subtitle = new Paragraph("Your user details");
         subtitle.getStyle().set("color", "var(--lumo-secondary-text-color)");
         
         VerticalLayout headerSection = new VerticalLayout(title, subtitle);
@@ -100,7 +100,7 @@ public class ProfileView extends VerticalLayout {
             profileImage.setSrc("images/avatar.png");
         }
         
-        profileImage.setAlt("תמונת פרופיל");
+        profileImage.setAlt("Profile Picture");
         profileImage.getStyle()
             .set("width", "8rem")
             .set("height", "8rem")
@@ -118,14 +118,30 @@ public class ProfileView extends VerticalLayout {
         uploadButton.getStyle()
             .set("position", "absolute")
             .set("bottom", "0")
+            // Position on right side in LTR layout
             .set("right", "0")
             .set("background-color", "var(--lumo-contrast)")
             .set("color", "var(--lumo-base-color)")
             .set("padding", "0.5rem")
             .set("border-radius", "50%")
-            .set("cursor", "pointer");
+            .set("cursor", "pointer")
+            // Make the button more prominent
+            .set("box-shadow", "0 2px 4px rgba(0,0,0,0.2)")
+            .set("z-index", "10");
         
         upload.setUploadButton(uploadButton);
+        // Hide the upload component's default elements
+        upload.getStyle()
+            .set("position", "absolute")
+            .set("bottom", "0") 
+            .set("right", "0")
+            .set("margin", "0")
+            .set("padding", "0");
+        
+        // Hide the dropzone and file list components
+        upload.setDropAllowed(false);
+        upload.setDropLabel(new Span(""));
+        
         upload.addSucceededListener(event -> {
             try {
                 byte[] imageBytes = buffer.getInputStream().readAllBytes();
@@ -144,10 +160,12 @@ public class ProfileView extends VerticalLayout {
             }
         });
         
-        Paragraph uploadHint = new Paragraph("לחץ על אייקון המצלמה כדי לעדכן את התמונה שלך");
+        Paragraph uploadHint = new Paragraph("Click the camera icon to update your picture");
         uploadHint.getStyle()
             .set("color", "var(--lumo-secondary-text-color)")
-            .set("font-size", "var(--lumo-font-size-s)");
+            .set("font-size", "var(--lumo-font-size-s)")
+            .set("margin-top", "0.75rem")
+            .set("margin-bottom", "0");
         
         imageContainer.add(profileImage, upload);
         imageSection.add(imageContainer, uploadHint);
@@ -167,7 +185,7 @@ public class ProfileView extends VerticalLayout {
         HorizontalLayout nameLabel = new HorizontalLayout();
         nameLabel.setAlignItems(FlexComponent.Alignment.CENTER);
         nameLabel.setSpacing(true);
-        nameLabel.add(VaadinIcon.USER.create(), new Span("שם מלא"));
+        nameLabel.add(VaadinIcon.USER.create(), new Span("Full Name"));
         nameLabel.getStyle()
             .set("color", "var(--lumo-secondary-text-color)")
             .set("font-size", "var(--lumo-font-size-s)");
@@ -190,7 +208,7 @@ public class ProfileView extends VerticalLayout {
         HorizontalLayout emailLabel = new HorizontalLayout();
         emailLabel.setAlignItems(FlexComponent.Alignment.CENTER);
         emailLabel.setSpacing(true);
-        emailLabel.add(VaadinIcon.ENVELOPE.create(), new Span("כתובת אימייל"));
+        emailLabel.add(VaadinIcon.ENVELOPE.create(), new Span("Email Address"));
         emailLabel.getStyle()
             .set("color", "var(--lumo-secondary-text-color)")
             .set("font-size", "var(--lumo-font-size-s)");
@@ -217,7 +235,7 @@ public class ProfileView extends VerticalLayout {
             .set("background-color", "var(--lumo-contrast-5pct)")
             .set("border-radius", "0.75rem");
         
-        H2 accountTitle = new H2("פרטי חשבון");
+        H2 accountTitle = new H2("Account Information");
         accountTitle.getStyle()
             .set("margin-top", "0")
             .set("font-size", "1.125rem")
@@ -235,10 +253,10 @@ public class ProfileView extends VerticalLayout {
             .set("padding", "0.5rem 0")
             .set("border-bottom", "1px solid var(--lumo-contrast-10pct)");
         
-        Span memberSinceLabel = new Span("חבר מתאריך");
+        Span memberSinceLabel = new Span("Member Since");
         
         String joinDate = currentUser != null && currentUser.getCreatedAt() != null ? 
-            currentUser.getCreatedAt().format(DateTimeFormatter.ISO_DATE) : "לא זמין";
+            currentUser.getCreatedAt().format(DateTimeFormatter.ISO_DATE) : "Not Available";
         Span memberSinceValue = new Span(joinDate);
         
         memberSinceRow.add(memberSinceLabel, memberSinceValue);
@@ -251,10 +269,10 @@ public class ProfileView extends VerticalLayout {
             .set("padding", "0.5rem 0")
             .set("border-bottom", "1px solid var(--lumo-contrast-10pct)");
         
-        Span lastLoginLabel = new Span("התחברות אחרונה");
+        Span lastLoginLabel = new Span("Last Login");
         
         String lastLoginDate = currentUser != null && currentUser.getLastLogin() != null ?
-            currentUser.getLastLogin().format(DateTimeFormatter.ISO_DATE) : "אף פעם";
+            currentUser.getLastLogin().format(DateTimeFormatter.ISO_DATE) : "Never";
         Span lastLoginValue = new Span(lastLoginDate);
         
         lastLoginRow.add(lastLoginLabel, lastLoginValue);
@@ -265,8 +283,8 @@ public class ProfileView extends VerticalLayout {
         statusRow.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
         statusRow.getStyle().set("padding", "0.5rem 0");
         
-        Span statusLabel = new Span("סטטוס חשבון");
-        Span statusValue = new Span("פעיל");
+        Span statusLabel = new Span("Account Status");
+        Span statusValue = new Span("Active");
         statusValue.getStyle().set("color", "var(--lumo-success-color)");
         
         statusRow.add(statusLabel, statusValue);
