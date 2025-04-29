@@ -54,6 +54,8 @@ public class Chat extends VerticalLayout {
     private boolean isDarkMode = false;
 
     public Chat() {
+        //if
+        
         sessionId = initializeSessionId();
 
         aes = initializeEncryption();

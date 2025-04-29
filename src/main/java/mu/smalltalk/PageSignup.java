@@ -16,10 +16,9 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import org.springframework.beans.factory.annotation.Autowired;
-
 import mu.smalltalk.Services.UserService;
-// Make sure User class is properly imported
-import mu.smalltalk.User;
+import mu.smalltalk.entitis.User;
+
 
 @CssImport("./styles/shared-styles.css")
 @Route("/signup")

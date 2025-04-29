@@ -17,6 +17,7 @@ import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.server.VaadinSession;
 
 import mu.smalltalk.Services.UserService;
+import mu.smalltalk.entitis.User;
 
 import org.springframework.beans.factory.annotation.Autowired;
 

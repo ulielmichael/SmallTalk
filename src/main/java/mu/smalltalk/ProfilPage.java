@@ -16,7 +16,7 @@ import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.StreamResource;
-import mu.smalltalk.User;
+import mu.smalltalk.entitis.User;
 import mu.smalltalk.Services.UserService;
 
 import java.io.ByteArrayInputStream;

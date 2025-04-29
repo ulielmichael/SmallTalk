@@ -1,18 +1,17 @@
-package mu.smalltalk;
+package mu.smalltalk.entitis;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.index.Indexed;
 import java.time.LocalDateTime;
 
 @Document(collection = "users")
 public class User {
-    @Id
+    
+    @Id  
     private String id;
     
     private String fullName;
     
-    @Indexed(unique = true)
     private String email;
     
     private String password;
@@ -27,6 +26,14 @@ public class User {
         this.createdAt = LocalDateTime.now();
     }
     
+    public String getId() {
+        return id;
+    }
+    
+    public void setId(String id) {
+        this.id = id;
+    }
+    
     public String getProfilePic() {
         return profilePic;
     }
@@ -37,19 +44,22 @@ public class User {
 
     // Constructor with fields
     public User(String fullName, String email, String hashedPassword) {
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be null or empty");
+        }
+        
+        if (fullName == null || fullName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Full name cannot be null or empty");
+        }
+        
+        if (hashedPassword == null || hashedPassword.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password cannot be null or empty");
+        }
+        
         this.fullName = fullName;
         this.email = email;
         this.password = hashedPassword;
         this.createdAt = LocalDateTime.now();
-    }
-    
-    // Getters and Setters
-    public String getId() {
-        return id;
-    }
-    
-    public void setId(String id) {
-        this.id = id;
     }
     
     public String getFullName() {
@@ -57,6 +67,9 @@ public class User {
     }
     
     public void setFullName(String fullName) {
+        if (fullName == null || fullName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Full name cannot be null or empty");
+        }
         this.fullName = fullName;
     }
     
@@ -65,6 +78,9 @@ public class User {
     }
     
     public void setEmail(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be null or empty");
+        }
         this.email = email;
     }
     
@@ -73,6 +89,9 @@ public class User {
     }
     
     public void setPassword(String password) {
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password cannot be null or empty");
+        }
         this.password = password;
     }
     
@@ -102,17 +121,12 @@ public class User {
                 ", lastLogin=" + lastLogin +
                 '}';
     }
-
   
-
-   
-  
-    // במקום המתודות הקיימות updateLastActivity, getUsername שמנסות לזרוק חריגות
     public void updateLastActivity() {
         this.lastLogin = LocalDateTime.now();
     }
 
     public String getUsername() {
-        return this.email; // במקרה שלך האימייל משמש כשם משתמש
+        return this.email;
     }
 }

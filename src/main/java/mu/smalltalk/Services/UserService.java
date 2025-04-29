@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import mu.smalltalk.User;
+import mu.smalltalk.entitis.User;
 import mu.smalltalk.repositoriy.UserRepository;
 
 import java.time.LocalDateTime;
@@ -27,7 +27,20 @@ public class UserService {
         // Log debug information
         System.out.println("Registering user: " + fullName + " with email: " + email);
         
-        // Check if email already exists
+        // Validate inputs
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be null or empty");
+        }
+        
+        if (fullName == null || fullName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Full name cannot be null or empty");
+        }
+        
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password cannot be null or empty");
+        }
+        
+        // Check if email already exists - קריטי לבצע בדיקה זו
         if (userRepository.existsByEmail(email)) {
             System.out.println("Registration failed: Email already exists: " + email);
             throw new RuntimeException("Email already registered");
@@ -56,6 +69,14 @@ public class UserService {
     
     public User authenticateUser(String email, String password) {
         System.out.println("Authenticating user with email: " + email);
+        
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be null or empty");
+        }
+        
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password cannot be null or empty");
+        }
         
         Optional<User> userOptional = userRepository.findByEmail(email);
         
@@ -100,18 +121,40 @@ public class UserService {
     public void updateProfilePicture(User user) {
         if (user != null && user.getId() != null) {
             userRepository.save(user);
+        } else {
+            throw new IllegalArgumentException("User or ID cannot be null");
         }
     }
     
     // Alternative method if you prefer to pass ID and image data separately
     public void updateProfilePicture(String userId, String profilePicData) {
-        if (userId != null) {
+        if (userId != null && !userId.trim().isEmpty()) {
             Optional<User> userOptional = userRepository.findById(userId);
             if (userOptional.isPresent()) {
                 User user = userOptional.get();
                 user.setProfilePic(profilePicData);
                 userRepository.save(user);
+            } else {
+                throw new RuntimeException("User not found with ID: " + userId);
             }
+        } else {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+    }
+    
+    // מתודה נוספת שמאפשרת חיפוש לפי אימייל ועדכון תמונת פרופיל
+    public void updateProfilePictureByEmail(String email, String profilePicData) {
+        if (email != null && !email.trim().isEmpty()) {
+            Optional<User> userOptional = userRepository.findByEmail(email);
+            if (userOptional.isPresent()) {
+                User user = userOptional.get();
+                user.setProfilePic(profilePicData);
+                userRepository.save(user);
+            } else {
+                throw new RuntimeException("User not found with email: " + email);
+            }
+        } else {
+            throw new IllegalArgumentException("User email cannot be null or empty");
         }
     }
 }
