@@ -27,6 +27,7 @@ public class PageHome extends VerticalLayout {
         
         // Features section
         Div featuresSection = createFeaturesSection();
+        Div ChatSection = createFeaturesSection();
         
         // Security section
         Div securitySection = createSecuritySection();
@@ -71,6 +72,7 @@ public class PageHome extends VerticalLayout {
         Anchor homeLink = new Anchor("#", "Home");
         homeLink.getStyle().set("font-weight", "bold");
 
+        Anchor chatlink = new Anchor("chat", "Chat");
         Anchor loginLink = new Anchor("login", "Login");
         Anchor logoutLink = new Anchor("logout", "Logout");
         Anchor signupLink = new Anchor("signup", "Signup");
@@ -79,7 +81,7 @@ public class PageHome extends VerticalLayout {
         Anchor techLink = new Anchor("#technology", "Technology");
         Anchor aboutLink = new Anchor("#about", "About");
         
-        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, loginLink, logoutLink, signupLink);
+        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, logoutLink, signupLink);
         
         // Style all links
         for (int i = 0; i < navLinks.getComponentCount(); i++) {

@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import mu.smalltalk.entitis.User;
 import mu.smalltalk.repositoriy.UserRepository;
 
+import com.vaadin.flow.server.VaadinSession;
+
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -14,13 +16,46 @@ import java.util.Optional;
 public class UserService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
-    private User currentUser;
+    
+    // קבועים לשימוש בניהול השיחה
+    public static final String USER_KEY = "user";
+    public static final String USERNAME_KEY = "username";
     
     @Autowired
     public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = new BCryptPasswordEncoder();
         System.out.println("UserService initialized with repository: " + userRepository);
+    }
+    
+    /**
+     * בדיקה האם המשתמש הנוכחי מחובר למערכת
+     */
+    public static boolean isUserAuthenticated() {
+        VaadinSession session = VaadinSession.getCurrent();
+        return session != null && session.getAttribute(USER_KEY) != null;
+    }
+    
+    /**
+     * החזרת משתמש מאומת נוכחי
+     */
+    public static User getAuthenticatedUser() {
+        VaadinSession session = VaadinSession.getCurrent();
+        if (session == null) {
+            return null;
+        }
+        return (User) session.getAttribute(USER_KEY);
+    }
+    
+    /**
+     * ניקוי פרטי המשתמש מהסשן (התנתקות)
+     */
+    public static void clearAuthenticatedUser() {
+        VaadinSession session = VaadinSession.getCurrent();
+        if (session != null) {
+            session.setAttribute(USER_KEY, null);
+            session.setAttribute(USERNAME_KEY, null);
+        }
     }
     
     public User registerUser(String fullName, String email, String password) {
@@ -93,7 +128,10 @@ public class UserService {
                 userRepository.save(user);
                 
                 // Set the current authenticated user
-                this.currentUser = user;
+                VaadinSession session = VaadinSession.getCurrent();
+                session.setAttribute(USER_KEY, user);
+                session.setAttribute(USERNAME_KEY, user.getEmail());
+                
                 return user;
             } else {
                 System.out.println("Password did not match for user: " + email);
@@ -106,15 +144,11 @@ public class UserService {
     }
     
     public User getCurrentUser() {
-        return currentUser;
-    }
-    
-    public void setCurrentUser(User user) {
-        this.currentUser = user;
+        return getAuthenticatedUser();
     }
     
     public void logout() {
-        this.currentUser = null;
+        clearAuthenticatedUser();
     }
     
     // Method to update user's profile picture

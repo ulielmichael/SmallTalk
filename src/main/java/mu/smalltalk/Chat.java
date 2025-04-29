@@ -2,8 +2,8 @@ package mu.smalltalk;
 
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
-import com.vaadin.flow.component.Unit;
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.Unit;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
@@ -11,14 +11,18 @@ import com.vaadin.flow.component.messages.MessageInput;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
+import com.vaadin.flow.router.BeforeEnterEvent;
+import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.shared.Registration;
+
 import mu.smalltalk.Services.EncryptionService;
 import mu.smalltalk.Services.GlobalMessageBroadcaster;
+import mu.smalltalk.Services.UserService;
+import mu.smalltalk.entitis.User;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,7 +33,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Route("chat")
-public class Chat extends VerticalLayout {
+public class Chat extends VerticalLayout implements BeforeEnterObserver {
 
     private final MessageInput messageInput;
     private final Upload mediaUpload;
@@ -54,8 +58,6 @@ public class Chat extends VerticalLayout {
     private boolean isDarkMode = false;
 
     public Chat() {
-        //if
-        
         sessionId = initializeSessionId();
 
         aes = initializeEncryption();
@@ -93,7 +95,11 @@ public class Chat extends VerticalLayout {
         HorizontalLayout header = new HorizontalLayout();
         header.setWidthFull();
         header.setJustifyContentMode(JustifyContentMode.BETWEEN);
-        header.add(new H2(sessionId), themeToggleButton);
+        
+        // Use authenticated user's email or name if available
+        User currentUser = UserService.getAuthenticatedUser();
+        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+        header.add(new H2(displayName), themeToggleButton);
         
         // Create action buttons layout
         HorizontalLayout actionButtons = new HorizontalLayout();
@@ -111,6 +117,7 @@ public class Chat extends VerticalLayout {
         Button logoutButton = new Button("Logout");
         logoutButton.addClickListener(e -> {
             // Clear user session data
+            UserService.clearAuthenticatedUser();
             VaadinSession.getCurrent().getSession().invalidate();
             // Clear local storage 
             UI.getCurrent().getPage().executeJs(
@@ -131,6 +138,19 @@ public class Chat extends VerticalLayout {
         
         // Load theme preference from local storage
         loadThemePreference();
+    }
+    
+    @Override
+    public void beforeEnter(BeforeEnterEvent event) {
+        // Check if user is authenticated, if not - redirect to login page
+        if (!UserService.isUserAuthenticated()) {
+            // User is not authenticated - redirect to the login page
+            event.forwardTo("login");  // Forward to the main/login page
+            
+            // Notification to the user
+            Notification.show("Please log in to access the chat", 
+                           3000, Notification.Position.MIDDLE);
+        }
     }
 
     private void loadThemePreference() {
@@ -252,13 +272,16 @@ public class Chat extends VerticalLayout {
         messageInput.addSubmitListener(submitEvent -> {
             String message = submitEvent.getValue();
             String timestamp = dateFormat.format(new Date());
-            System.out.println("Received message from " + sessionId + ": " + message);
+            
+            // Get user's name for display if authenticated
+            User currentUser = UserService.getAuthenticatedUser();
+            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+            
+            System.out.println("Received message from " + displayName + ": " + message);
 
             // Broadcast the message to all users
-            String formattedMessage = "[" + timestamp + "] " + sessionId + ": " + message;
+            String formattedMessage = "[" + timestamp + "] " + displayName + ": " + message;
             sendMessage(formattedMessage);
-
-            // No need to add the message locally as it will come through the broadcaster
             
             encryptionService.encryptStringAsync(message)
                     .thenAccept(encryptedMessage -> {
@@ -269,7 +292,7 @@ public class Chat extends VerticalLayout {
                                     String encTimestamp = dateFormat.format(new Date());
                                     String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
 
-                                    String encryptedFormattedMessage = "[" + encTimestamp + "] " + sessionId + ": <b>Encrypted:</b> "
+                                    String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName + ": <b>Encrypted:</b> "
                                             + encodedMessage;
                                     
                                     // Broadcast the encrypted message too
@@ -289,7 +312,7 @@ public class Chat extends VerticalLayout {
                             try {
                                 currentUI.access(() -> {
                                     String errorTimestamp = dateFormat.format(new Date());
-                                    String errorMessage = "[" + errorTimestamp + "] " + sessionId
+                                    String errorMessage = "[" + errorTimestamp + "] " + displayName
                                             + ": <b>Error encrypting message:</b> " + ex.getMessage();
                                     
                                     // Broadcast error messages too
@@ -408,61 +431,64 @@ public class Chat extends VerticalLayout {
         VaadinSession session = VaadinSession.getCurrent();
         String uniqueId;
     
-        // בודק קודם אם יש לנו שם משתמש ב-session
-        if (session.getAttribute("username") != null) {
-            uniqueId = session.getAttribute("username").toString();
+        // First check if the user is authenticated
+        User currentUser = UserService.getAuthenticatedUser();
+        if (currentUser != null) {
+            uniqueId = currentUser.getFullName(); // Use the user's name
             session.setAttribute("sessionId", uniqueId);
             
-            // שומר ב-localStorage
+            // Save to localStorage
             UI.getCurrent().getPage().executeJs(
                     "localStorage.setItem('chat-session-id', $0);", uniqueId);
             
-            // מעדכן מיד את תצוגת ממשק המשתמש
+            // Update UI display immediately
             updateSessionIdDisplay(uniqueId);
             
             return uniqueId;
         }
+        
+        // If user is not authenticated, use anonymous ID
         UI.getCurrent().getPage().executeJs(
             "return localStorage.getItem('chat-session-id');")
             .then(String.class, result -> {
                 if (result != null && !result.isEmpty()) {
                     // Save to session for this browser tab/session
                     session.setAttribute("sessionId", result);
-                    session.setAttribute("username", result); // Store as username too
                     
                     // Update display immediately
                     updateSessionIdDisplay(result);
                     this.sessionId = result;
                 }
             });
-            if (session.getAttribute("sessionId") == null) {
-                uniqueId = "User-" + UUID.randomUUID().toString().substring(0, 8);
-                session.setAttribute("sessionId", uniqueId);
-                // Don't set username here since it's auto-generated
         
-                UI.getCurrent().getPage().executeJs(
-                        "localStorage.setItem('chat-session-id', $0);", uniqueId);
-                
-                return uniqueId;
-            } else {
-                uniqueId = session.getAttribute("sessionId").toString();
-            }
-        
+        if (session.getAttribute("sessionId") == null) {
+            uniqueId = "Guest-" + UUID.randomUUID().toString().substring(0, 8);
+            session.setAttribute("sessionId", uniqueId);
+    
+            UI.getCurrent().getPage().executeJs(
+                    "localStorage.setItem('chat-session-id', $0);", uniqueId);
+            
             return uniqueId;
+        } else {
+            uniqueId = session.getAttribute("sessionId").toString();
         }
+    
+        return uniqueId;
+    }
 
-        private void updateSessionIdDisplay(String id) {
-            getChildren().forEach(component -> {
-                if (component instanceof HorizontalLayout) {
-                    HorizontalLayout layout = (HorizontalLayout) component;
-                    layout.getChildren().forEach(child -> {
-                        if (child instanceof H2) {
-                            ((H2) child).setText(id);
-                        }
-                    });
-                }
-            });
-        }
+    private void updateSessionIdDisplay(String id) {
+        getChildren().forEach(component -> {
+            if (component instanceof HorizontalLayout) {
+                HorizontalLayout layout = (HorizontalLayout) component;
+                layout.getChildren().forEach(child -> {
+                    if (child instanceof H2) {
+                        ((H2) child).setText(id);
+                    }
+                });
+            }
+        });
+    }
+    
     private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
         Button uploadButton = new Button("Upload");
         upload.setUploadButton(uploadButton);
@@ -472,6 +498,10 @@ public class Chat extends VerticalLayout {
         upload.addSucceededListener(event -> {
             UI ui = UI.getCurrent();
             VaadinSession session = VaadinSession.getCurrent();
+            
+            // Get user's name for display if authenticated
+            User currentUser = UserService.getAuthenticatedUser();
+            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
             
             String fileName = event.getFileName();
             String mimeType = event.getMIMEType();
@@ -484,12 +514,12 @@ public class Chat extends VerticalLayout {
                 if (mimeType.startsWith("image/")) {
                     String imageHtml = "<img src='data:" + mimeType + ";base64," + base64Data +
                             "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
-                    sendMessage("[" + timestamp + "] " + sessionId + ": ✅ Image uploaded: " + fileName + "<br>"
+                    sendMessage("[" + timestamp + "] " + displayName + ": ✅ Image uploaded: " + fileName + "<br>"
                             + imageHtml);
                 } else if (mimeType.startsWith("audio/")) {
                     String audioHtml = "<audio controls><source src='data:" + mimeType + ";base64," +
                             base64Data + "' type='" + mimeType + "'></audio>";
-                    sendMessage("[" + timestamp + "] " + sessionId + ": ✅ Audio uploaded: " + fileName + "<br>"
+                    sendMessage("[" + timestamp + "] " + displayName + ": ✅ Audio uploaded: " + fileName + "<br>"
                             + audioHtml);
                 }
 
@@ -501,7 +531,7 @@ public class Chat extends VerticalLayout {
                             try {
                                 ui.access(() -> {
                                     String encTimestamp = dateFormat.format(new Date());
-                                    String successMessage = "[" + encTimestamp + "] " + sessionId + ": ✅ File " + fileName
+                                    String successMessage = "[" + encTimestamp + "] " + displayName + ": ✅ File " + fileName
                                             + " encrypted successfully";
                                     
                                     // Broadcast the success message
@@ -520,7 +550,7 @@ public class Chat extends VerticalLayout {
                             try {
                                 ui.access(() -> {
                                     String errorTimestamp = dateFormat.format(new Date());
-                                    String errorMessage = "[" + errorTimestamp + "] " + sessionId
+                                    String errorMessage = "[" + errorTimestamp + "] " + displayName
                                             + ": ❌ Error encrypting file: " + ex.getMessage();
                                     
                                     // Broadcast the error message
@@ -537,20 +567,18 @@ public class Chat extends VerticalLayout {
             } catch (IOException e) {
                 String errorTimestamp = dateFormat.format(new Date());
                 sendMessage(
-                        "[" + errorTimestamp + "] " + sessionId + ": ❌ Error processing the file: " + e.getMessage());
+                        "[" + errorTimestamp + "] " + displayName + ": ❌ Error processing the file: " + e.getMessage());
             }
         });
 
         upload.addFailedListener(event -> {
+            // Get user's name for display if authenticated
+            User currentUser = UserService.getAuthenticatedUser();
+            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+            
             String errorTimestamp = dateFormat.format(new Date());
-            sendMessage("[" + errorTimestamp + "] " + sessionId + ": ❌ Upload failed: " + event.getReason());
+            sendMessage("[" + errorTimestamp + "] " + displayName + ": ❌ Upload failed: " + event.getReason());
         });
-    }
-
-    // We're now broadcasting all messages, so this method is simplified
-    private void addLocalMessage(String content) {
-        // Instead of a separate method, we'll use sendMessage to broadcast all messages
-        sendMessage(content);
     }
 
     private void sendMessage(String content) {
@@ -575,6 +603,10 @@ public class Chat extends VerticalLayout {
         UI ui = UI.getCurrent();
         VaadinSession session = VaadinSession.getCurrent();
         
+        // Get user's name for display if authenticated
+        User currentUser = UserService.getAuthenticatedUser();
+        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+        
         byte[] encryptedMessage = Base64.getDecoder().decode(encodedMessage);
 
         encryptionService.decryptToStringAsync(encryptedMessage)
@@ -584,7 +616,7 @@ public class Chat extends VerticalLayout {
                     try {
                         ui.access(() -> {
                             String decTimestamp = dateFormat.format(new Date());
-                            String displayMessage = "[" + decTimestamp + "] " + sessionId + ": <b>Decrypted:</b> "
+                            String displayMessage = "[" + decTimestamp + "] " + displayName + ": <b>Decrypted:</b> "
                                     + decryptedMessage;
 
                             // Always broadcast the decrypted message
@@ -603,7 +635,7 @@ public class Chat extends VerticalLayout {
                     try {
                         ui.access(() -> {
                             String errorTimestamp = dateFormat.format(new Date());
-                            String errorMessage = "[" + errorTimestamp + "] " + sessionId
+                            String errorMessage = "[" + errorTimestamp + "] " + displayName
                                     + ": <b>Error decrypting message:</b> " + ex.getMessage();
 
                             // Always broadcast error messages
@@ -619,38 +651,42 @@ public class Chat extends VerticalLayout {
             });
     }
 
-   private void addMessageToChat(String content) {
-    Div messageDiv = new Div();
-    messageDiv.getElement().setProperty("innerHTML", content);
-    messageDiv.getStyle().set("padding", "10px");
-    messageDiv.getStyle().set("word-break", "break-word");
-    messageDiv.getStyle().set("margin-bottom", "5px");
-    messageDiv.getStyle().set("border-bottom", "1px solid " + (isDarkMode ? "#444" : "#eee"));
-    
-    // חשוב: לא לסנן הודעות לפי sessionId, רק לעצב אותן בצורה שונה
-    if (content.contains(sessionId)) {
-        // עיצוב להודעות שלך
-        if (isDarkMode) {
-            messageDiv.getStyle().set("background-color", "#2d3748");
-            messageDiv.getStyle().set("border-left", "3px solid #63b3ed");
+    private void addMessageToChat(String content) {
+        Div messageDiv = new Div();
+        messageDiv.getElement().setProperty("innerHTML", content);
+        messageDiv.getStyle().set("padding", "10px");
+        messageDiv.getStyle().set("word-break", "break-word");
+        messageDiv.getStyle().set("margin-bottom", "5px");
+        messageDiv.getStyle().set("border-bottom", "1px solid " + (isDarkMode ? "#444" : "#eee"));
+        
+        // Get user's name for display if authenticated
+        User currentUser = UserService.getAuthenticatedUser();
+        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+        
+        // Important: don't filter messages by sessionId, just style them differently
+        if (content.contains(displayName)) {
+            // Styling for your own messages
+            if (isDarkMode) {
+                messageDiv.getStyle().set("background-color", "#2d3748");
+                messageDiv.getStyle().set("border-left", "3px solid #63b3ed");
+            } else {
+                messageDiv.getStyle().set("background-color", "#ebf8ff");
+                messageDiv.getStyle().set("border-left", "3px solid #3182ce");
+            }
         } else {
-            messageDiv.getStyle().set("background-color", "#ebf8ff");
-            messageDiv.getStyle().set("border-left", "3px solid #3182ce");
+            // Styling for messages from others
+            if (isDarkMode) {
+                messageDiv.getStyle().set("background-color", "#2a2f3a");
+                messageDiv.getStyle().set("border-left", "3px solid #718096");
+            } else {
+                messageDiv.getStyle().set("background-color", "#f7fafc");
+                messageDiv.getStyle().set("border-left", "3px solid #a0aec0");
+            }
         }
-    } else {
-        // עיצוב להודעות של אחרים
-        if (isDarkMode) {
-            messageDiv.getStyle().set("background-color", "#2a2f3a");
-            messageDiv.getStyle().set("border-left", "3px solid #718096");
-        } else {
-            messageDiv.getStyle().set("background-color", "#f7fafc");
-            messageDiv.getStyle().set("border-left", "3px solid #a0aec0");
-        }
-    }
 
-    chatContainer.add(messageDiv);
-    scrollToBottom();
-}
+        chatContainer.add(messageDiv);
+        scrollToBottom();
+    }
 
     private Aes256 initializeEncryption() {
         try {
