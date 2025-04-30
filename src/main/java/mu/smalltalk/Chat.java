@@ -116,13 +116,10 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
 
         Button logoutButton = new Button("Logout");
         logoutButton.addClickListener(e -> {
-            // Clear user session data
             UserService.clearAuthenticatedUser();
             VaadinSession.getCurrent().getSession().invalidate();
-            // Clear local storage 
             UI.getCurrent().getPage().executeJs(
                 "localStorage.removeItem('chat-session-id');");
-            // Navigate back to login/home page
             UI.getCurrent().navigate("");
         });
 
@@ -136,18 +133,14 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
 
         setupCrossBrowserCommunication();
         
-        // Load theme preference from local storage
         loadThemePreference();
     }
     
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
-        // Check if user is authenticated, if not - redirect to login page
         if (!UserService.isUserAuthenticated()) {
-            // User is not authenticated - redirect to the login page
-            event.forwardTo("login");  // Forward to the main/login page
+            event.forwardTo("login");  
             
-            // Notification to the user
             Notification.show("Please log in to access the chat", 
                            3000, Notification.Position.MIDDLE);
         }
@@ -182,16 +175,13 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
             themeToggleButton.getStyle().set("color", "white");
         }
         
-        // Save preference to local storage
         UI.getCurrent().getPage().executeJs(
                 "localStorage.setItem('chat-theme-preference', $0);", isDarkMode ? "dark" : "light");
                 
-        // Reapply styles to messages
         refreshChatHistory();
     }
     
     private void applyDarkMode() {
-        // Apply dark theme to main components
         getStyle().set("background-color", "#2c2c2c");
         getStyle().set("color", "#f0f0f0");
         
@@ -203,7 +193,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
     }
     
     private void applyLightMode() {
-        // Apply light theme to main components
         getStyle().set("background-color", "#f8f8f8");
         getStyle().set("color", "#333");
         
@@ -224,7 +213,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
 
         UI ui = attachEvent.getUI();
         if (ui != null) {
-            // Reduce poll interval for more responsive updates
             ui.setPollInterval(500); 
         }
     }
@@ -242,7 +230,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
     private void loadExistingMessages() {
         List<String> existingMessages = Chatstorage.getMessages();
         
-        // Clear existing messages in the UI before loading
         chatContainer.removeAll();
         
         for (String message : existingMessages) {
@@ -253,7 +240,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         scrollToBottom();
     }
     
-    // Add a method to refresh the chat history
     private void refreshChatHistory() {
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
@@ -273,13 +259,11 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
             String message = submitEvent.getValue();
             String timestamp = dateFormat.format(new Date());
             
-            // Get user's name for display if authenticated
             User currentUser = UserService.getAuthenticatedUser();
             String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
             
             System.out.println("Received message from " + displayName + ": " + message);
 
-            // Broadcast the message to all users
             String formattedMessage = "[" + timestamp + "] " + displayName + ": " + message;
             sendMessage(formattedMessage);
             
@@ -295,7 +279,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                                     String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName + ": <b>Encrypted:</b> "
                                             + encodedMessage;
                                     
-                                    // Broadcast the encrypted message too
                                     sendMessage(encryptedFormattedMessage);
 
                                     decryptAndDisplayMessage(encodedMessage, false);
@@ -315,7 +298,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                                     String errorMessage = "[" + errorTimestamp + "] " + displayName
                                             + ": <b>Error encrypting message:</b> " + ex.getMessage();
                                     
-                                    // Broadcast error messages too
                                     sendMessage(errorMessage);
                                     
                                     currentUI.push();
@@ -340,7 +322,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                             "});",
                     getElement());
                     
-            // Add a trigger to notify other browser windows when a message is sent
             ui.getPage().executeJs(
                     "function notifyOtherWindows() {" +
                     "   localStorage.setItem('chat-update-trigger', Date.now().toString());" +
@@ -367,7 +348,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                 int currentMessageCount = allMessages.size();
 
                 if (currentMessageCount > lastSeenMessageCount) {
-                    // Only add new messages
                     for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
                         addMessageToChat(allMessages.get(i));
                     }
@@ -375,7 +355,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
 
                     scrollToBottom();
                     
-                    // Notify other browser windows
                     ui.getPage().executeJs("window.notifyOtherWindows();");
                     
                     ui.push();
@@ -399,7 +378,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                     ui.access(() -> {
                         addMessageToChat(message);
                         
-                        // Update the last seen count after receiving a message
                         lastSeenMessageCount = Chatstorage.getMessages().size();
                         
                         scrollToBottom();
@@ -431,31 +409,25 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         VaadinSession session = VaadinSession.getCurrent();
         String uniqueId;
     
-        // First check if the user is authenticated
         User currentUser = UserService.getAuthenticatedUser();
         if (currentUser != null) {
-            uniqueId = currentUser.getFullName(); // Use the user's name
+            uniqueId = currentUser.getFullName(); 
             session.setAttribute("sessionId", uniqueId);
             
-            // Save to localStorage
             UI.getCurrent().getPage().executeJs(
                     "localStorage.setItem('chat-session-id', $0);", uniqueId);
             
-            // Update UI display immediately
             updateSessionIdDisplay(uniqueId);
             
             return uniqueId;
         }
         
-        // If user is not authenticated, use anonymous ID
         UI.getCurrent().getPage().executeJs(
             "return localStorage.getItem('chat-session-id');")
             .then(String.class, result -> {
                 if (result != null && !result.isEmpty()) {
-                    // Save to session for this browser tab/session
                     session.setAttribute("sessionId", result);
                     
-                    // Update display immediately
                     updateSessionIdDisplay(result);
                     this.sessionId = result;
                 }
@@ -499,7 +471,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
             UI ui = UI.getCurrent();
             VaadinSession session = VaadinSession.getCurrent();
             
-            // Get user's name for display if authenticated
             User currentUser = UserService.getAuthenticatedUser();
             String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
             
@@ -534,7 +505,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                                     String successMessage = "[" + encTimestamp + "] " + displayName + ": ✅ File " + fileName
                                             + " encrypted successfully";
                                     
-                                    // Broadcast the success message
                                     sendMessage(successMessage);
                                     
                                     ui.push();
@@ -553,7 +523,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                                     String errorMessage = "[" + errorTimestamp + "] " + displayName
                                             + ": ❌ Error encrypting file: " + ex.getMessage();
                                     
-                                    // Broadcast the error message
                                     sendMessage(errorMessage);
                                     
                                     ui.push();
@@ -572,7 +541,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         });
 
         upload.addFailedListener(event -> {
-            // Get user's name for display if authenticated
             User currentUser = UserService.getAuthenticatedUser();
             String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
             
@@ -582,10 +550,8 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
     }
 
     private void sendMessage(String content) {
-        // This broadcasts the message to all connected clients
         GlobalMessageBroadcaster.broadcast(content);
         
-        // Trigger the local UI to refresh immediately without waiting for the broadcast
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
             ui.access(() -> {
@@ -603,7 +569,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         UI ui = UI.getCurrent();
         VaadinSession session = VaadinSession.getCurrent();
         
-        // Get user's name for display if authenticated
         User currentUser = UserService.getAuthenticatedUser();
         String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
         
@@ -619,7 +584,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                             String displayMessage = "[" + decTimestamp + "] " + displayName + ": <b>Decrypted:</b> "
                                     + decryptedMessage;
 
-                            // Always broadcast the decrypted message
                             sendMessage(displayMessage);
 
                             ui.push();
@@ -638,7 +602,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                             String errorMessage = "[" + errorTimestamp + "] " + displayName
                                     + ": <b>Error decrypting message:</b> " + ex.getMessage();
 
-                            // Always broadcast error messages
                             sendMessage(errorMessage);
 
                             ui.push();
@@ -659,13 +622,10 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         messageDiv.getStyle().set("margin-bottom", "5px");
         messageDiv.getStyle().set("border-bottom", "1px solid " + (isDarkMode ? "#444" : "#eee"));
         
-        // Get user's name for display if authenticated
         User currentUser = UserService.getAuthenticatedUser();
         String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
         
-        // Important: don't filter messages by sessionId, just style them differently
         if (content.contains(displayName)) {
-            // Styling for your own messages
             if (isDarkMode) {
                 messageDiv.getStyle().set("background-color", "#2d3748");
                 messageDiv.getStyle().set("border-left", "3px solid #63b3ed");
@@ -674,7 +634,6 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                 messageDiv.getStyle().set("border-left", "3px solid #3182ce");
             }
         } else {
-            // Styling for messages from others
             if (isDarkMode) {
                 messageDiv.getStyle().set("background-color", "#2a2f3a");
                 messageDiv.getStyle().set("border-left", "3px solid #718096");
