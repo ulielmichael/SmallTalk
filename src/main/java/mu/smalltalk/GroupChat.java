@@ -5,6 +5,7 @@ import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.Unit;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.messages.MessageInput;
@@ -21,7 +22,9 @@ import com.vaadin.flow.shared.Registration;
 
 import mu.smalltalk.Services.EncryptionService;
 import mu.smalltalk.Services.GlobalMessageBroadcaster;
+import mu.smalltalk.Services.GroupService;
 import mu.smalltalk.Services.UserService;
+import mu.smalltalk.entitis.Group;
 import mu.smalltalk.entitis.User;
 
 import java.io.IOException;
@@ -33,7 +36,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Route("chat")
-public class Chat extends VerticalLayout implements BeforeEnterObserver {
+public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
 
     private final MessageInput messageInput;
     private final Upload mediaUpload;
@@ -45,6 +48,8 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
 
     private String sessionId;
     private Registration broadcasterRegistration;
+    private ComboBox<Group> groupSelector;
+    private String currentGroupId = null;
 
     private int lastSeenMessageCount = 0;
     
@@ -57,7 +62,7 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
     // Track current theme
     private boolean isDarkMode = false;
 
-    public Chat() {
+    public GroupChat() {
         sessionId = initializeSessionId();
 
         aes = initializeEncryption();
@@ -101,9 +106,43 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
         header.add(new H2(displayName), themeToggleButton);
         
+        // Create group selector
+        groupSelector = new ComboBox<>("Select Group");
+        groupSelector.setItemLabelGenerator(Group::getName);
+        
+        // Fill the group selector with the groups the user belongs to
+        if (currentUser != null) {
+            List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+            groupSelector.setItems(userGroups);
+            
+            if (!userGroups.isEmpty()) {
+                groupSelector.setValue(userGroups.get(0));
+                currentGroupId = userGroups.get(0).getId();
+            }
+        }
+        
+        groupSelector.addValueChangeListener(event -> {
+            if (event.getValue() != null) {
+                currentGroupId = event.getValue().getId();
+                refreshChatHistory();
+                
+                // Update the chat title with the group name
+                getChildren().forEach(component -> {
+                    if (component instanceof HorizontalLayout) {
+                        HorizontalLayout layout = (HorizontalLayout) component;
+                        layout.getChildren().forEach(child -> {
+                            if (child instanceof H2) {
+                                ((H2) child).setText(displayName + " - " + event.getValue().getName());
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        
         // Create action buttons layout
         HorizontalLayout actionButtons = new HorizontalLayout();
-        actionButtons.add(refreshButton);
+        actionButtons.add(refreshButton, groupSelector);
         actionButtons.setSpacing(true);
         
         // Create toolbar with home and logout buttons
@@ -127,13 +166,14 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
 
         add(toolbar, header, chatContainer, messageInput, mediaUpload, actionButtons);
 
-        loadExistingMessages();
-
         setupMessageHandler();
-
         setupCrossBrowserCommunication();
-        
         loadThemePreference();
+        
+        // Load messages after everything else is set up
+        UI.getCurrent().access(() -> {
+            loadExistingMessages();
+        });
     }
     
     @Override
@@ -228,7 +268,11 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
     }
 
     private void loadExistingMessages() {
-        List<String> existingMessages = Chatstorage.getMessages();
+        if (currentGroupId == null) {
+            return;
+        }
+        
+        List<String> existingMessages = Chatstorage.getGroupMessages(currentGroupId);
         
         chatContainer.removeAll();
         
@@ -256,16 +300,21 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         VaadinSession currentSession = VaadinSession.getCurrent();
 
         messageInput.addSubmitListener(submitEvent -> {
+            if (currentGroupId == null) {
+                Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
+                return;
+            }
+            
             String message = submitEvent.getValue();
             String timestamp = dateFormat.format(new Date());
             
             User currentUser = UserService.getAuthenticatedUser();
             String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
             
-            System.out.println("Received message from " + displayName + ": " + message);
+            System.out.println("Received message from " + displayName + " in group " + currentGroupId + ": " + message);
 
             String formattedMessage = "[" + timestamp + "] " + displayName + ": " + message;
-            sendMessage(formattedMessage);
+            sendGroupMessage(formattedMessage, currentGroupId);
             
             encryptionService.encryptStringAsync(message)
                     .thenAccept(encryptedMessage -> {
@@ -279,9 +328,9 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                                     String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName + ": <b>Encrypted:</b> "
                                             + encodedMessage;
                                     
-                                    sendMessage(encryptedFormattedMessage);
+                                    sendGroupMessage(encryptedFormattedMessage, currentGroupId);
 
-                                    decryptAndDisplayMessage(encodedMessage, false);
+                                    decryptAndDisplayMessage(encodedMessage, currentGroupId);
                                     currentUI.push();
                                 });
                             } finally {
@@ -298,7 +347,7 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                                     String errorMessage = "[" + errorTimestamp + "] " + displayName
                                             + ": <b>Error encrypting message:</b> " + ex.getMessage();
                                     
-                                    sendMessage(errorMessage);
+                                    sendGroupMessage(errorMessage, currentGroupId);
                                     
                                     currentUI.push();
                                 });
@@ -341,10 +390,14 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
     }
 
     public void checkForNewMessages() {
+        if (currentGroupId == null) {
+            return;
+        }
+        
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
             ui.access(() -> {
-                List<String> allMessages = Chatstorage.getMessages();
+                List<String> allMessages = Chatstorage.getGroupMessages(currentGroupId);
                 int currentMessageCount = allMessages.size();
 
                 if (currentMessageCount > lastSeenMessageCount) {
@@ -363,39 +416,43 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         }
     }
 
-    private void registerWithBroadcaster() {
-        UI ui = UI.getCurrent();
-        if (ui != null) {
-            if (broadcasterRegistration != null) {
-                broadcasterRegistration.remove();
-                broadcasterRegistration = null;
-            }
+// Replace the following method in GroupChat.java:
 
-            System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
-
-            broadcasterRegistration = GlobalMessageBroadcaster.register(ui, message -> {
-                if (ui.isAttached()) {
-                    ui.access(() -> {
-                        addMessageToChat(message);
-                        
-                        lastSeenMessageCount = Chatstorage.getMessages().size();
-                        
-                        scrollToBottom();
-                        ui.push();
-                    });
-                }
-            });
-
-            if (broadcasterRegistration == null) {
-                System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
-                Notification.show("Failed to connect to the chat server. Please refresh the page.",
-                        3000, Notification.Position.MIDDLE);
-            }
-        } else {
-            System.err.println("Cannot register with broadcaster - UI is null");
+private void registerWithBroadcaster() {
+    UI ui = UI.getCurrent();
+    if (ui != null) {
+        if (broadcasterRegistration != null) {
+            broadcasterRegistration.remove();
+            broadcasterRegistration = null;
         }
-    }
 
+        System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
+
+        // Using the new GroupMessageConsumer interface
+        broadcasterRegistration = GlobalMessageBroadcaster.register(ui, (message, groupId) -> {
+            if (ui.isAttached() && (currentGroupId != null && currentGroupId.equals(groupId))) {
+                ui.access(() -> {
+                    addMessageToChat(message);
+                    
+                    if (currentGroupId != null) {
+                        lastSeenMessageCount = Chatstorage.getGroupMessages(currentGroupId).size();
+                    }
+                    
+                    scrollToBottom();
+                    ui.push();
+                });
+            }
+        });
+
+        if (broadcasterRegistration == null) {
+            System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
+            Notification.show("Failed to connect to the chat server. Please refresh the page.",
+                    3000, Notification.Position.MIDDLE);
+        }
+    } else {
+        System.err.println("Cannot register with broadcaster - UI is null");
+    }
+}
     public void ensureRegistration() {
         if (broadcasterRegistration == null || !GlobalMessageBroadcaster.isRegistered(UI.getCurrent())) {
             System.out.println("Re-registering with broadcaster after reconnection");
@@ -454,7 +511,12 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                 HorizontalLayout layout = (HorizontalLayout) component;
                 layout.getChildren().forEach(child -> {
                     if (child instanceof H2) {
-                        ((H2) child).setText(id);
+                        // If we have a group selected, show both the username and group name
+                        if (groupSelector != null && groupSelector.getValue() != null) {
+                            ((H2) child).setText(id + " - " + groupSelector.getValue().getName());
+                        } else {
+                            ((H2) child).setText(id);
+                        }
                     }
                 });
             }
@@ -468,6 +530,11 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         upload.setMaxFileSize(16 * 1024 * 1024); // 16 MB
 
         upload.addSucceededListener(event -> {
+            if (currentGroupId == null) {
+                Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
+                return;
+            }
+            
             UI ui = UI.getCurrent();
             VaadinSession session = VaadinSession.getCurrent();
             
@@ -485,13 +552,13 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                 if (mimeType.startsWith("image/")) {
                     String imageHtml = "<img src='data:" + mimeType + ";base64," + base64Data +
                             "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
-                    sendMessage("[" + timestamp + "] " + displayName + ": ✅ Image uploaded: " + fileName + "<br>"
-                            + imageHtml);
+                    sendGroupMessage("[" + timestamp + "] " + displayName + ": ✅ Image uploaded: " + fileName + "<br>"
+                            + imageHtml, currentGroupId);
                 } else if (mimeType.startsWith("audio/")) {
                     String audioHtml = "<audio controls><source src='data:" + mimeType + ";base64," +
                             base64Data + "' type='" + mimeType + "'></audio>";
-                    sendMessage("[" + timestamp + "] " + displayName + ": ✅ Audio uploaded: " + fileName + "<br>"
-                            + audioHtml);
+                    sendGroupMessage("[" + timestamp + "] " + displayName + ": ✅ Audio uploaded: " + fileName + "<br>"
+                            + audioHtml, currentGroupId);
                 }
 
                 final byte[] finalFileData = fileData;
@@ -505,7 +572,7 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                                     String successMessage = "[" + encTimestamp + "] " + displayName + ": ✅ File " + fileName
                                             + " encrypted successfully";
                                     
-                                    sendMessage(successMessage);
+                                    sendGroupMessage(successMessage, currentGroupId);
                                     
                                     ui.push();
                                 });
@@ -523,7 +590,7 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                                     String errorMessage = "[" + errorTimestamp + "] " + displayName
                                             + ": ❌ Error encrypting file: " + ex.getMessage();
                                     
-                                    sendMessage(errorMessage);
+                                    sendGroupMessage(errorMessage, currentGroupId);
                                     
                                     ui.push();
                                 });
@@ -535,8 +602,9 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                     });
             } catch (IOException e) {
                 String errorTimestamp = dateFormat.format(new Date());
-                sendMessage(
-                        "[" + errorTimestamp + "] " + displayName + ": ❌ Error processing the file: " + e.getMessage());
+                sendGroupMessage(
+                        "[" + errorTimestamp + "] " + displayName + ": ❌ Error processing the file: " + e.getMessage(), 
+                        currentGroupId);
             }
         });
 
@@ -545,12 +613,17 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
             String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
             
             String errorTimestamp = dateFormat.format(new Date());
-            sendMessage("[" + errorTimestamp + "] " + displayName + ": ❌ Upload failed: " + event.getReason());
+            sendGroupMessage("[" + errorTimestamp + "] " + displayName + ": ❌ Upload failed: " + event.getReason(), 
+                currentGroupId);
         });
     }
 
-    private void sendMessage(String content) {
-        GlobalMessageBroadcaster.broadcast(content);
+    private void sendGroupMessage(String content, String groupId) {
+        if (groupId == null) {
+            return;
+        }
+        
+        GlobalMessageBroadcaster.broadcastToGroup(content, groupId);
         
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
@@ -565,7 +638,7 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
         chatContainer.getElement().executeJs("this.scrollTop = this.scrollHeight");
     }
 
-    private void decryptAndDisplayMessage(String encodedMessage, boolean localOnly) {
+    private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
         UI ui = UI.getCurrent();
         VaadinSession session = VaadinSession.getCurrent();
         
@@ -584,7 +657,7 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                             String displayMessage = "[" + decTimestamp + "] " + displayName + ": <b>Decrypted:</b> "
                                     + decryptedMessage;
 
-                            sendMessage(displayMessage);
+                            sendGroupMessage(displayMessage, groupId);
 
                             ui.push();
                         });
@@ -602,7 +675,7 @@ public class Chat extends VerticalLayout implements BeforeEnterObserver {
                             String errorMessage = "[" + errorTimestamp + "] " + displayName
                                     + ": <b>Error decrypting message:</b> " + ex.getMessage();
 
-                            sendMessage(errorMessage);
+                            sendGroupMessage(errorMessage, groupId);
 
                             ui.push();
                         });

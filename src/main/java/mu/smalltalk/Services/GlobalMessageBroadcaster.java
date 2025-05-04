@@ -8,17 +8,23 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.UIDetachedException;
 import com.vaadin.flow.shared.Registration;
 
-import io.netty.util.internal.shaded.org.jctools.queues.MessagePassingQueue.Consumer;
 import mu.smalltalk.Chatstorage;
 
 public class GlobalMessageBroadcaster {
     private static final List<BroadcastListener> listeners = new CopyOnWriteArrayList<>();
     
+    /**
+     * Interface for message consumers that can receive group-specific messages
+     */
+    public interface GroupMessageConsumer {
+        void accept(String message, String groupId);
+    }
+    
     private static class BroadcastListener {
         final UI ui;
-        final Consumer<String> consumer;
+        final GroupMessageConsumer consumer;
         
-        BroadcastListener(UI ui, Consumer<String> consumer) {
+        BroadcastListener(UI ui, GroupMessageConsumer consumer) {
             this.ui = ui;
             this.consumer = consumer;
         }
@@ -27,10 +33,10 @@ public class GlobalMessageBroadcaster {
     /**
      * Register a UI and message consumer to receive broadcasts
      * @param ui The UI instance to register
-     * @param messageConsumer Consumer that processes received messages
+     * @param messageConsumer Consumer that processes received messages with their group ID
      * @return Registration object that can be used to unregister
      */
-    public static synchronized Registration register(UI ui, Consumer<String> messageConsumer) {
+    public static synchronized Registration register(UI ui, GroupMessageConsumer messageConsumer) {
         if (ui == null || messageConsumer == null) {
             System.err.println("Cannot register null UI or consumer");
             return null;
@@ -47,28 +53,34 @@ public class GlobalMessageBroadcaster {
     }
     
     /**
-     * Broadcast a message to all registered listeners
+     * Broadcast a message to all registered listeners in a specific group
      * @param message The message to broadcast
+     * @param groupId The ID of the group to broadcast to
      */
-    public static synchronized void broadcast(String message) {
-        // Store message in persistent storage
-        Chatstorage.addMessage(message);
+    public static synchronized void broadcastToGroup(String message, String groupId) {
+        if (groupId == null) {
+            System.err.println("Cannot broadcast to null group ID");
+            return;
+        }
         
-        System.out.println("Broadcasting message: " + message);
+        // Store message in group-specific persistent storage
+        Chatstorage.addGroupMessage(message, groupId);
+        
+        System.out.println("Broadcasting message to group " + groupId + ": " + message);
         System.out.println("Active listeners: " + listeners.size());
         
         List<BroadcastListener> toRemove = new ArrayList<>();
         
         for (BroadcastListener listener : listeners) {
             UI ui = listener.ui;
-            Consumer<String> consumer = listener.consumer;
+            GroupMessageConsumer consumer = listener.consumer;
             
             if (ui != null && ui.isAttached()) {
                 try {
                     System.out.println("Sending to UI: " + ui.getUIId());
                     ui.access(() -> {
                         try {
-                            consumer.accept(message);
+                            consumer.accept(message, groupId);
                             ui.push();
                         } catch (Exception e) {
                             System.err.println("Error delivering message to UI " + ui.getUIId() + ": " + e.getMessage());
@@ -93,7 +105,56 @@ public class GlobalMessageBroadcaster {
             System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
         }
     }
+    
+    /**
+     * Broadcast a message to all registered listeners
+     * This method is kept for backward compatibility
+     * @param message The message to broadcast
+     */
+    public static synchronized void broadcast(String message) {
+        // Store message in persistent storage
+        Chatstorage.addMessage(message);
         
+        System.out.println("Broadcasting global message: " + message);
+        System.out.println("Active listeners: " + listeners.size());
+        
+        List<BroadcastListener> toRemove = new ArrayList<>();
+        
+        for (BroadcastListener listener : listeners) {
+            UI ui = listener.ui;
+            GroupMessageConsumer consumer = listener.consumer;
+            
+            if (ui != null && ui.isAttached()) {
+                try {
+                    System.out.println("Sending to UI: " + ui.getUIId());
+                    ui.access(() -> {
+                        try {
+                            // Pass null as groupId for global messages
+                            consumer.accept(message, null);
+                            ui.push();
+                        } catch (Exception e) {
+                            System.err.println("Error delivering message to UI " + ui.getUIId() + ": " + e.getMessage());
+                        }
+                    });
+                    
+                    ui.getPage().executeJs(
+                        "localStorage.setItem('chat-update-trigger', Date.now().toString());"
+                    );
+                } catch (UIDetachedException e) {
+                    System.out.println("UI " + ui.getUIId() + " detached, marking for removal");
+                    toRemove.add(listener);
+                }
+            } else {
+                System.out.println("UI detached or null, marking for removal");
+                toRemove.add(listener);
+            }
+        }
+        
+        if (!toRemove.isEmpty()) {
+            listeners.removeAll(toRemove);
+            System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
+        }
+    }
     
     /**
      * Check if a UI is currently registered

@@ -1,75 +1,114 @@
 package mu.smalltalk;
 
-
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * Simple in-memory storage for chat messages
+ */
 public class Chatstorage {
-    // For backward compatibility - keep the global message list
-    private static final List<String> messages = new ArrayList<>();
+    private static final List<String> messages = Collections.synchronizedList(new ArrayList<>());
+    private static final Map<String, List<String>> groupMessages = new ConcurrentHashMap<>();
     
-    // New conversation-based storage
-    private static final Map<String, List<Message>> conversations = new ConcurrentHashMap<>();
-
-    /**
-     * Add a message to the global message list (for backward compatibility)
-     */
-    public static synchronized void addMessage(String message) {
-        messages.add(message);
-    }
-
-    /**
-     * Get all messages (for backward compatibility)
-     */
-    public static synchronized List<String> getMessages() {
-        return new ArrayList<>(messages);
-    }
+    private static final int MAX_MESSAGES = 100; // Maximum number of messages to store per group
     
     /**
-     * Add a message to a specific conversation
-     * @param conversationId The ID of the conversation
+     * Add a message to the global chat storage
      * @param message The message to add
      */
-    public static synchronized void addMessageToConversation(String conversationId, Message message) {
-        conversations.computeIfAbsent(conversationId, k -> new CopyOnWriteArrayList<>()).add(message);
-        
-        // Also add a string representation to the global message list for backward compatibility
-        String formattedMessage = createFormattedMessageString(message);
-        addMessage(formattedMessage);
-    }
-    
-    /**
-     * Get all messages for a specific conversation
-     * @param conversationId The ID of the conversation
-     * @return A list of messages in the conversation
-     */
-    public static synchronized List<Message> getConversationMessages(String conversationId) {
-        return new ArrayList<>(conversations.getOrDefault(conversationId, new ArrayList<>()));
-    }
-    
-    /**
-     * Get all conversations
-     * @return A map of conversation IDs to lists of messages
-     */
-    public static synchronized Map<String, List<Message>> getAllConversations() {
-        Map<String, List<Message>> result = new HashMap<>();
-        for (Map.Entry<String, List<Message>> entry : conversations.entrySet()) {
-            result.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+    public static void addMessage(String message) {
+        synchronized (messages) {
+            messages.add(message);
+            
+            // Keep only the last MAX_MESSAGES messages
+            if (messages.size() > MAX_MESSAGES) {
+                messages.remove(0);
+            }
         }
-        return result;
     }
     
     /**
-     * Create a formatted string representation of a message
+     * Add a message to a specific group's chat storage
+     * @param message The message to add
+     * @param groupId The ID of the group
      */
-    private static String createFormattedMessageString(Message message) {
-        String formattedTime = message.getTime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        String textContent = message.getTextContent() != null ? new String(message.getTextContent()) : "";
+    public static void addGroupMessage(String message, String groupId) {
+        if (groupId == null) {
+            addMessage(message); // Fall back to global messages
+            return;
+        }
         
-        return "[" + formattedTime + "] " + message.getSenderID() + " -> " + message.getReceiverID() + ": " + textContent;
+        groupMessages.computeIfAbsent(groupId, k -> Collections.synchronizedList(new ArrayList<>()));
+        
+        List<String> groupMessageList = groupMessages.get(groupId);
+        synchronized (groupMessageList) {
+            groupMessageList.add(message);
+            
+            // Keep only the last MAX_MESSAGES messages
+            if (groupMessageList.size() > MAX_MESSAGES) {
+                groupMessageList.remove(0);
+            }
+        }
+    }
+    
+    /**
+     * Get all messages from the global chat storage
+     * @return List of messages
+     */
+    public static List<String> getAllMessages() {
+        synchronized (messages) {
+            return new ArrayList<>(messages);
+        }
+    }
+    
+    /**
+     * Get all messages for a specific group
+     * @param groupId The ID of the group
+     * @return List of messages for the group, or empty list if no messages
+     */
+    public static List<String> getGroupMessages(String groupId) {
+        if (groupId == null) {
+            return getAllMessages(); // Fall back to global messages
+        }
+        
+        List<String> groupMessageList = groupMessages.get(groupId);
+        if (groupMessageList == null) {
+            return new ArrayList<>();
+        }
+        
+        synchronized (groupMessageList) {
+            return new ArrayList<>(groupMessageList);
+        }
+    }
+    
+    /**
+     * Clear all messages from all storages
+     */
+    public static void clearAllMessages() {
+        synchronized (messages) {
+            messages.clear();
+        }
+        
+        groupMessages.clear();
+    }
+    
+    /**
+     * Clear all messages for a specific group
+     * @param groupId The ID of the group
+     */
+    public static void clearGroupMessages(String groupId) {
+        if (groupId == null) {
+            return;
+        }
+        
+        List<String> groupMessageList = groupMessages.get(groupId);
+        if (groupMessageList != null) {
+            synchronized (groupMessageList) {
+                groupMessageList.clear();
+            }
+        }
     }
 }

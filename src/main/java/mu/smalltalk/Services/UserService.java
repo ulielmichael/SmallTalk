@@ -191,4 +191,9 @@ public class UserService {
             throw new IllegalArgumentException("User email cannot be null or empty");
         }
     }
+
+    public static User getUserById(String user1Id) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getUserById'");
+    }
 }

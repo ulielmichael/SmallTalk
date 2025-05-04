@@ -206,7 +206,7 @@ public class LoginPage extends VerticalLayout {
                     3000, Notification.Position.TOP_CENTER)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                 
-                getUI().ifPresent(ui -> ui.navigate(Chat.class));
+                getUI().ifPresent(ui -> ui.navigate(GroupChat.class));
                 
             } catch (Exception ex) {
                 // Show error message
