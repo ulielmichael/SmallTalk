@@ -8,6 +8,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.messages.MessageInput;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -30,6 +31,7 @@ import mu.smalltalk.entitis.User;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Base64;
 import java.util.Date;
@@ -44,6 +46,7 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
     private final Aes256 aes;
     private final EncryptionService encryptionService;
     private final VerticalLayout chatContainer;
+    private final VerticalLayout userListContainer; // Added user list container
     private static final int CHAT_HEIGHT = 500;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
@@ -71,6 +74,7 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
 
         messageInput = new MessageInput();
         chatContainer = new VerticalLayout();
+        userListContainer = new VerticalLayout(); // Initialize user list container
 
         chatContainer.setWidthFull();
         chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
@@ -80,6 +84,13 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
         
         chatContainer.getStyle().set("overflow-y", "auto");
         chatContainer.getStyle().set("border", "1px solid #ddd");
+
+        // Configure user list container
+        userListContainer.setWidthFull();
+        userListContainer.getStyle().set("padding", "10px");
+        userListContainer.getStyle().set("margin-bottom", "10px");
+        userListContainer.getStyle().set("border", "1px solid #ddd");
+        userListContainer.getStyle().set("border-radius", "4px");
 
         messageInput.setWidthFull();
 
@@ -110,16 +121,28 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
         // Create group selector
         groupSelector = new ComboBox<>("Select Group");
         groupSelector.setItemLabelGenerator(Group::getName);
+        groupSelector.setWidthFull();
+        
+        // Create new group button
+        Button newGroupButton = new Button("Create New Group");
+        newGroupButton.addClickListener(e -> createNewGroup());
         
         // Fill the group selector with the groups the user belongs to
         if (currentUser != null) {
             List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+            
+            // If no groups exist, create a default group for this user
+            if (userGroups.isEmpty()) {
+                System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
+                Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
+                userGroups = GroupService.getUserGroups(currentUser.getId());
+            }
+            
             groupSelector.setItems(userGroups);
             
-            // Check if there are no groups available
-            if (userGroups.isEmpty()) {
-                System.out.println("Warning: No groups available to select");
-            } else {
+            // Set the first group as default if available
+            if (!userGroups.isEmpty()) {
+                System.out.println("Setting default group: " + userGroups.get(0).getName());
                 groupSelector.setValue(userGroups.get(0));
                 currentGroupId = userGroups.get(0).getId();
             }
@@ -129,6 +152,7 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
             if (event.getValue() != null) {
                 currentGroupId = event.getValue().getId();
                 refreshChatHistory();
+                updateUserList(); // Update user list when group changes
                 
                 // Update the chat title with the group name
                 getChildren().forEach(component -> {
@@ -151,7 +175,8 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
         
         // Create action buttons layout
         HorizontalLayout actionButtons = new HorizontalLayout();
-        actionButtons.add(refreshButton, groupSelector);
+        actionButtons.add(refreshButton, groupSelector, newGroupButton);
+        actionButtons.setWidthFull();
         actionButtons.setSpacing(true);
         
         // Create toolbar with home and logout buttons
@@ -173,14 +198,19 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
 
         toolbar.add(homeButton, logoutButton);
 
-        add(toolbar, header, chatContainer, messageInput, mediaUpload, actionButtons);
+        // Add a section for user list
+        H3 userListHeader = new H3("Group Members");
+        
+        // Add components to main layout
+        add(toolbar, header, userListHeader, userListContainer, chatContainer, messageInput, mediaUpload, actionButtons);
 
         setupMessageHandler();
         setupCrossBrowserCommunication();
         loadThemePreference();
     }
 
-    @Override
+ 
+@Override
 public void beforeEnter(BeforeEnterEvent event) {
     if (!UserService.isUserAuthenticated()) {
         event.forwardTo("login");  
@@ -198,7 +228,7 @@ public void beforeEnter(BeforeEnterEvent event) {
             // Check if user is allowed to join this group
             User currentUser = UserService.getAuthenticatedUser();
             if (currentUser != null) {
-                List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+                final List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
                 
                 // Find the target group
                 final Group foundGroup = userGroups.stream()
@@ -213,6 +243,7 @@ public void beforeEnter(BeforeEnterEvent event) {
                     UI.getCurrent().access(() -> {
                         groupSelector.setValue(foundGroup);
                         loadExistingMessages();
+                        updateUserList();
                     });
                 } else {
                     Notification.show("You are not a member of this group", 
@@ -225,18 +256,107 @@ public void beforeEnter(BeforeEnterEvent event) {
         // If no group is specified, try to select the first available group
         User currentUser = UserService.getAuthenticatedUser();
         if (currentUser != null) {
-            List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
-            if (!userGroups.isEmpty()) {
+            final List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+            
+            // Create a default group if no groups exist
+            if (userGroups.isEmpty()) {
+                System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
+                final Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
+                final List<Group> updatedUserGroups = GroupService.getUserGroups(currentUser.getId());
+                
                 UI.getCurrent().access(() -> {
-                    Group firstGroup = userGroups.get(0);
-                    currentGroupId = firstGroup.getId();
-                    groupSelector.setValue(firstGroup);
-                    loadExistingMessages();
+                    if (!updatedUserGroups.isEmpty()) {
+                        Group firstGroup = updatedUserGroups.get(0);
+                        currentGroupId = firstGroup.getId();
+                        groupSelector.setItems(updatedUserGroups); // Refresh the items
+                        groupSelector.setValue(firstGroup);
+                        loadExistingMessages();
+                        updateUserList();
+                    }
+                });
+            } else {
+                UI.getCurrent().access(() -> {
+                    if (!userGroups.isEmpty()) {
+                        Group firstGroup = userGroups.get(0);
+                        currentGroupId = firstGroup.getId();
+                        groupSelector.setItems(userGroups); // Refresh the items
+                        groupSelector.setValue(firstGroup);
+                        loadExistingMessages();
+                        updateUserList();
+                    }
                 });
             }
         }
     }
 }
+
+    private void createNewGroup() {
+        User currentUser = UserService.getAuthenticatedUser();
+        if (currentUser != null) {
+            // Create a simple dialog to enter group name
+            // In a real app, this would be a proper dialog component
+            String groupName = "New Group " + new Date().getTime();
+            Group newGroup = GroupService.createGroup(groupName, currentUser.getId());
+            
+            if (newGroup != null) {
+                // Refresh the group selector
+                List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+                groupSelector.setItems(userGroups);
+                groupSelector.setValue(newGroup);
+                
+                Notification.show("Group created: " + groupName, 
+                    2000, Notification.Position.MIDDLE);
+            }
+        }
+    }
+
+    private void updateUserList() {
+        if (currentGroupId == null) {
+            return;
+        }
+        
+        User currentUser = UserService.getAuthenticatedUser();
+        if (currentUser == null) {
+            return;
+        }
+        
+        // Clear previous list
+        userListContainer.removeAll();
+        
+        // Get users for the current group
+        List<User> groupUsers = GroupService.getGroupUsers(currentGroupId);
+        
+        // Display users in the container
+        if (groupUsers.isEmpty()) {
+            Div noUsersDiv = new Div();
+            noUsersDiv.setText("No members in this group");
+            userListContainer.add(noUsersDiv);
+        } else {
+            HorizontalLayout userLayout = new HorizontalLayout();
+            userLayout.setWidthFull();
+            userLayout.getStyle().set("flex-wrap", "wrap");
+            
+            for (User user : groupUsers) {
+                Div userDiv = new Div();
+                userDiv.setText(user.getFullName());
+                userDiv.getStyle().set("margin", "5px");
+                userDiv.getStyle().set("padding", "5px 10px");
+                userDiv.getStyle().set("border-radius", "15px");
+                
+                // Highlight current user
+                if (user.getId().equals(currentUser.getId())) {
+                    userDiv.getStyle().set("background-color", isDarkMode ? "#4a5568" : "#bee3f8");
+                    userDiv.getStyle().set("font-weight", "bold");
+                } else {
+                    userDiv.getStyle().set("background-color", isDarkMode ? "#2d3748" : "#e2e8f0");
+                }
+                
+                userLayout.add(userDiv);
+            }
+            
+            userListContainer.add(userLayout);
+        }
+    }
 
     private void loadThemePreference() {
         UI.getCurrent().getPage().executeJs(
@@ -271,6 +391,7 @@ public void beforeEnter(BeforeEnterEvent event) {
                 "localStorage.setItem('chat-theme-preference', $0);", isDarkMode ? "dark" : "light");
                 
         refreshChatHistory();
+        updateUserList(); // Update user list when theme changes
     }
     
     private void applyDarkMode() {
@@ -279,6 +400,9 @@ public void beforeEnter(BeforeEnterEvent event) {
         
         chatContainer.getStyle().set("background-color", "#1e1e1e");
         chatContainer.getStyle().set("border", "1px solid #444");
+        
+        userListContainer.getStyle().set("background-color", "#1e1e1e");
+        userListContainer.getStyle().set("border", "1px solid #444");
         
         messageInput.getStyle().set("background-color", "#333");
         messageInput.getStyle().set("color", "white");
@@ -290,6 +414,9 @@ public void beforeEnter(BeforeEnterEvent event) {
         
         chatContainer.getStyle().set("background-color", "white");
         chatContainer.getStyle().set("border", "1px solid #ddd");
+        
+        userListContainer.getStyle().set("background-color", "white");
+        userListContainer.getStyle().set("border", "1px solid #ddd");
         
         messageInput.getStyle().set("background-color", "white");
         messageInput.getStyle().set("color", "#333");
@@ -308,14 +435,24 @@ public void beforeEnter(BeforeEnterEvent event) {
                 User currentUser = UserService.getAuthenticatedUser();
                 if (currentUser != null) {
                     List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+                    
+                    // Create a default group if no groups exist
+                    if (userGroups.isEmpty()) {
+                        System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
+                        Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
+                        userGroups = GroupService.getUserGroups(currentUser.getId());
+                    }
+                    
                     if (!userGroups.isEmpty()) {
                         currentGroupId = userGroups.get(0).getId();
+                        groupSelector.setItems(userGroups); // Refresh the items
                         groupSelector.setValue(userGroups.get(0));
                     }
                 }
             }
             
             loadExistingMessages();
+            updateUserList();
         });
         
         checkForNewMessages();
@@ -358,6 +495,7 @@ public void beforeEnter(BeforeEnterEvent event) {
         if (ui != null && ui.isAttached()) {
             ui.access(() -> {
                 loadExistingMessages();
+                updateUserList();
                 ui.push();
                 Notification.show("Chat refreshed", 2000, Notification.Position.BOTTOM_CENTER);
             });
@@ -453,6 +591,7 @@ public void beforeEnter(BeforeEnterEvent event) {
         if (ui != null && ui.isAttached()) {
             ui.access(() -> {
                 checkForNewMessages();
+                updateUserList();
                 ui.push();
             });
         }
@@ -670,139 +809,107 @@ public void beforeEnter(BeforeEnterEvent event) {
                     });
             } catch (IOException e) {
                 String errorTimestamp = dateFormat.format(new Date());
-                sendGroupMessage(
-                        "[" + errorTimestamp + "] " + displayName + ": ❌ Error processing the file: " + e.getMessage(), 
-                        currentGroupId);
+                String errorMessage = "[" + errorTimestamp + "] " + displayName
+                        + ": ❌ Error processing file: " + e.getMessage();
+                
+                sendGroupMessage(errorMessage, currentGroupId);
             }
-        });
-
-        upload.addFailedListener(event -> {
-            User currentUser = UserService.getAuthenticatedUser();
-            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-            
-            String errorTimestamp = dateFormat.format(new Date());
-            sendGroupMessage("[" + errorTimestamp + "] " + displayName + ": ❌ Upload failed: " + event.getReason(), 
-                currentGroupId);
         });
     }
 
-    private void sendGroupMessage(String content, String groupId) {
+    private void sendGroupMessage(String message, String groupId) {
         if (groupId == null) {
+            System.err.println("Cannot send message: Group ID is null");
             return;
         }
         
-        // Add message to storage first
-        Chatstorage.addGroupMessage(content, groupId);
+        // Store message in the group's chat history
+        Chatstorage.addGroupMessage(groupId, message);
         
-        // Then broadcast to all UIs
-        GlobalMessageBroadcaster.broadcastToGroup(content, groupId);
+        // Broadcast message to all connected clients
+        GlobalMessageBroadcaster.broadcastToGroup(message, groupId);
         
-        UI ui = UI.getCurrent();
-        if (ui != null && ui.isAttached()) {
-            ui.access(() -> {
-                checkForNewMessages();
-                ui.push();
-            });
-        }
+        // Notify other browser windows/tabs
+        UI.getCurrent().getPage().executeJs("window.notifyOtherWindows();");
     }
 
-    private void scrollToBottom() {
-        chatContainer.getElement().executeJs("this.scrollTop = this.scrollHeight");
-    }
-
-    private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
-        UI ui = UI.getCurrent();
-        VaadinSession session = VaadinSession.getCurrent();
-        
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-        
-        byte[] encryptedMessage = Base64.getDecoder().decode(encodedMessage);
-
-        encryptionService.decryptToStringAsync(encryptedMessage)
-            .thenAccept(decryptedMessage -> {
-                if (ui.isAttached() && !session.getSession().isNew()) {
-                    session.lock();
-                    try {
-                        ui.access(() -> {
-                            String decTimestamp = dateFormat.format(new Date());
-                            String displayMessage = "[" + decTimestamp + "] " + displayName + ": <b>Decrypted:</b> "
-                                    + decryptedMessage;
-
-                            sendGroupMessage(displayMessage, groupId);
-
-                            ui.push();
-                        });
-                    } finally {
-                        session.unlock();
-                    }
-                }
-            })
-            .exceptionally(ex -> {
-                if (ui.isAttached() && !session.getSession().isNew()) {
-                    session.lock();
-                    try {
-                        ui.access(() -> {
-                            String errorTimestamp = dateFormat.format(new Date());
-                            String errorMessage = "[" + errorTimestamp + "] " + displayName
-                                    + ": <b>Error decrypting message:</b> " + ex.getMessage();
-
-                            sendGroupMessage(errorMessage, groupId);
-
-                            ui.push();
-                        });
-                    } finally {
-                        session.unlock();
-                    }
-                }
-                return null;
-            });
-    }
-
-    private void addMessageToChat(String content) {
+    private void addMessageToChat(String message) {
         Div messageDiv = new Div();
-        messageDiv.getElement().setProperty("innerHTML", content);
-        messageDiv.getStyle().set("padding", "10px");
-        messageDiv.getStyle().set("word-break", "break-word");
-        messageDiv.getStyle().set("margin-bottom", "5px");
-        messageDiv.getStyle().set("border-bottom", "1px solid " + (isDarkMode ? "#444" : "#eee"));
+        messageDiv.getElement().setProperty("innerHTML", message);
         
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-        
-        if (content.contains(displayName)) {
-            if (isDarkMode) {
-                messageDiv.getStyle().set("background-color", "#2d3748");
-                messageDiv.getStyle().set("border-left", "3px solid #63b3ed");
-            } else {
-                messageDiv.getStyle().set("background-color", "#ebf8ff");
-                messageDiv.getStyle().set("border-left", "3px solid #3182ce");
-            }
+        // Apply theme-specific styling
+        if (isDarkMode) {
+            messageDiv.getStyle().set("background-color", "#2d3748");
+            messageDiv.getStyle().set("color", "#e2e8f0");
         } else {
-            if (isDarkMode) {
-                messageDiv.getStyle().set("background-color", "#2a2f3a");
-                messageDiv.getStyle().set("border-left", "3px solid #718096");
-            } else {
-                messageDiv.getStyle().set("background-color", "#f7fafc");
-                messageDiv.getStyle().set("border-left", "3px solid #a0aec0");
-            }
+            messageDiv.getStyle().set("background-color", "#f0f0f0");
+            messageDiv.getStyle().set("color", "#333");
         }
-
+        
+        messageDiv.getStyle().set("padding", "8px 12px");
+        messageDiv.getStyle().set("margin-bottom", "8px");
+        messageDiv.getStyle().set("border-radius", "8px");
+        messageDiv.getStyle().set("word-wrap", "break-word");
+        
         chatContainer.add(messageDiv);
         scrollToBottom();
     }
 
-       
-    private Aes256 initializeEncryption() {
+    private void scrollToBottom() {
+        UI.getCurrent().getPage().executeJs(
+                "setTimeout(function() { "
+                + "  const chatContainer = document.querySelector('.chat-container'); "
+                + "  if (chatContainer) { "
+                + "    chatContainer.scrollTop = chatContainer.scrollHeight; "
+                + "  } "
+                + "}, 100);");
+    }
+
+    private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
         try {
-            byte[] key = new byte[32];
-            for (int i = 0; i < key.length; i++) {
-                key[i] = (byte) i;
-            }
-            return new Aes256(key);
+            byte[] encryptedBytes = Base64.getDecoder().decode(encodedMessage);
+            
+            User currentUser = UserService.getAuthenticatedUser();
+            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+            
+            encryptionService.decryptAsync(encryptedBytes)
+                .thenAccept(decryptedBytes -> {
+                    String decryptedMessage = new String(decryptedBytes);
+                    String timestamp = dateFormat.format(new Date());
+                    String formattedMessage = "[" + timestamp + "] " + displayName + ": <b>Decrypted:</b> " + decryptedMessage;
+                    
+                    sendGroupMessage(formattedMessage, groupId);
+                })
+                .exceptionally(ex -> {
+                    String errorTimestamp = dateFormat.format(new Date());
+                    String errorMessage = "[" + errorTimestamp + "] " + displayName
+                            + ": <b>Error decrypting message:</b> " + ex.getMessage();
+                    
+                    sendGroupMessage(errorMessage, groupId);
+                    return null;
+                });
         } catch (Exception e) {
-            Notification.show("Error initializing encryption");
-            throw new RuntimeException("Failed to initialize encryption", e);
+            String timestamp = dateFormat.format(new Date());
+            String errorMessage = "[" + timestamp + "] System: <b>Invalid Base64 encoding:</b> " + e.getMessage();
+            
+            sendGroupMessage(errorMessage, groupId);
         }
     }
+private Aes256 initializeEncryption() {
+    try {
+        String keyString = "this-is-a-sample-encryption-key-123456";
+        byte[] keyBytes = keyString.getBytes(StandardCharsets.UTF_8);
+        
+        if (keyBytes.length != 32) {
+            byte[] adjustedKey = new byte[32];
+            System.arraycopy(keyBytes, 0, adjustedKey, 0, Math.min(keyBytes.length, 32));
+            return new Aes256(adjustedKey);
+        } else {
+            return new Aes256(keyBytes);
+        }
+    } catch (Exception e) {
+        System.err.println("Failed to initialize encryption: " + e.getMessage());
+        return null;
+    }
+}
 }
