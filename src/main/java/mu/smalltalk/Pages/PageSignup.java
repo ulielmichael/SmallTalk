@@ -1,4 +1,4 @@
-package mu.smalltalk;
+package mu.smalltalk.Pages;
 
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.dependency.CssImport;
@@ -16,6 +16,7 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import org.springframework.beans.factory.annotation.Autowired;
+
 import mu.smalltalk.Services.UserService;
 import mu.smalltalk.entitis.User;
 

@@ -1,4 +1,4 @@
-package mu.smalltalk;
+package mu.smalltalk.Pages;
 
 import com.vaadin.flow.component.dependency.CssImport;
 import com.vaadin.flow.component.UI;
@@ -16,6 +16,7 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.server.VaadinSession;
 
+import mu.smalltalk.GroupChat;
 import mu.smalltalk.Services.UserService;
 import mu.smalltalk.entitis.User;
 

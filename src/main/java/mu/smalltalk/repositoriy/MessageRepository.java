@@ -3,7 +3,8 @@ package mu.smalltalk.repositoriy;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
-import mu.smalltalk.Message;
+import mu.smalltalk.entitis.Message;
+
 import java.util.List;
 
 @Repository

@@ -1,4 +1,4 @@
-package mu.smalltalk;
+package mu.smalltalk.Pages;
 
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.dependency.CssImport;

@@ -1,7 +1,11 @@
-package mu.smalltalk;
+package mu.smalltalk.entitis;
 
 import java.time.LocalDateTime;
 
+import org.springframework.data.mongodb.core.mapping.Document;
+
+
+@Document(collection = "Messages")
 public class Message 
 {
     private String senderID;
