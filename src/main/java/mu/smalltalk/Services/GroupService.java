@@ -28,7 +28,7 @@ public class GroupService {
      */
     public static Group createGroup(String name, String creatorId) {
         String groupId = UUID.randomUUID().toString();
-        Group group = new Group(groupId, name, creatorId, groupId, 0);
+        Group group = new Group(groupId, name, creatorId, groupId, System.currentTimeMillis());
         
         groups.put(groupId, group);
         
@@ -37,6 +37,8 @@ public class GroupService {
         
         // Add creator as first member
         addUserToGroup(creatorId, groupId);
+        
+        System.out.println("Created group: " + group.getName() + " (ID: " + groupId + ") with creator: " + creatorId);
         
         return group;
     }
@@ -67,6 +69,7 @@ public class GroupService {
         
         return true;
     }
+   
     
     /**
      * Remove a user from a group
@@ -169,11 +172,17 @@ public class GroupService {
         // Check if any of those groups is a DM group with user2
         for (Group group : user1Groups) {
             List<String> members = getGroupMembers(group.getId());
-            if (members.size() == 2 && members.contains(user1Id) && members.contains(user2Id)) {
+            
+            // If it's a 2-person group and contains both users, it's a DM group
+            if (members.size() == 2 && 
+                members.contains(user1Id) && 
+                members.contains(user2Id) &&
+                group.getName().startsWith("DM:")) {
                 return group;
             }
         }
         
+        // No existing DM group found
         return null;
     }
     
@@ -192,5 +201,26 @@ public class GroupService {
         
         // If not found, create new DM group
         return createDirectMessageGroup(user1Id, user2Id);
+    }
+    
+    /**
+     * Returns a list of users in a specific group
+     * @param groupId The ID of the group
+     * @return List of users in the group
+     */
+    public static List<User> getGroupUsers(String groupId) {
+        // Get the group members (user IDs)
+        List<String> memberIds = getGroupMembers(groupId);
+        
+        // Convert user IDs to User objects
+        List<User> users = new ArrayList<>();
+        for (String userId : memberIds) {
+            User user = UserService.getUserById(userId);
+            if (user != null) {
+                users.add(user);
+            }
+        }
+        
+        return users;
     }
 }

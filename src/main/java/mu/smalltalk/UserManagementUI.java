@@ -64,8 +64,6 @@ public class UserManagementUI extends VerticalLayout {
         
         add(new H3("User Management"), toolbar);
     }
-    
-    // ... existing code ...
 
     /**
      * Start a direct message with the selected user
@@ -120,6 +118,7 @@ public class UserManagementUI extends VerticalLayout {
                     2000, Notification.Position.BOTTOM_CENTER);
         });
         
+        
         HorizontalLayout buttons = new HorizontalLayout(createButton, cancelButton);
         buttons.setSpacing(true);
         
@@ -133,12 +132,10 @@ public class UserManagementUI extends VerticalLayout {
         dialog.add(layout);
         dialog.open();
     }
-    
     /**
      * Navigate to the chat view with a specific group selected
      */
     private void navigateToChat(String groupId) {
-        // תיקון: ניווט לדף הצ'אט עם פרמטר הקבוצה
         UI.getCurrent().navigate("chat/" + groupId);
     }
     
@@ -155,6 +152,11 @@ public class UserManagementUI extends VerticalLayout {
         userSelector.setItems(allUsers);
     }
     
+    /**
+     * Update a user's profile picture by email
+     * @param email The user's email
+     * @param profilePicData The profile picture data
+     */
     public void updateProfilePictureByEmail(String email, String profilePicData) {
         if (email != null && !email.trim().isEmpty()) {
             java.util.Optional<User> userOptional = userRepository.findByEmail(email);

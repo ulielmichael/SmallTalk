@@ -111,4 +111,9 @@ public class Chatstorage {
             }
         }
     }
+
+    public static void addMessageToGroup(String message, String groupId) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'addMessageToGroup'");
+    }
 }

@@ -17,6 +17,7 @@ import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.RouteParameters;
 import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.shared.Registration;
 
@@ -35,7 +36,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-@Route("chat")
+@Route("chat/:groupId?")
 public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
 
     private final MessageInput messageInput;
@@ -115,7 +116,10 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
             List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
             groupSelector.setItems(userGroups);
             
-            if (!userGroups.isEmpty()) {
+            // Check if there are no groups available
+            if (userGroups.isEmpty()) {
+                System.out.println("Warning: No groups available to select");
+            } else {
                 groupSelector.setValue(userGroups.get(0));
                 currentGroupId = userGroups.get(0).getId();
             }
@@ -137,6 +141,11 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
                         });
                     }
                 });
+                
+                // Update URL to reflect the selected group
+                if (UI.getCurrent() != null) {
+                    UI.getCurrent().navigate("chat/" + currentGroupId);
+                }
             }
         });
         
@@ -169,22 +178,65 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
         setupMessageHandler();
         setupCrossBrowserCommunication();
         loadThemePreference();
+    }
+
+    @Override
+public void beforeEnter(BeforeEnterEvent event) {
+    if (!UserService.isUserAuthenticated()) {
+        event.forwardTo("login");  
         
-        // Load messages after everything else is set up
-        UI.getCurrent().access(() -> {
-            loadExistingMessages();
-        });
+        Notification.show("Please log in to access the chat", 
+                       3000, Notification.Position.MIDDLE);
+        return;
     }
     
-    @Override
-    public void beforeEnter(BeforeEnterEvent event) {
-        if (!UserService.isUserAuthenticated()) {
-            event.forwardTo("login");  
-            
-            Notification.show("Please log in to access the chat", 
-                           3000, Notification.Position.MIDDLE);
+    // Handle group ID parameter if present
+    List<String> segments = event.getLocation().getSegments();
+    if (segments.size() > 1) {
+        String groupIdParam = segments.get(1);
+        if (groupIdParam != null && !groupIdParam.isEmpty()) {
+            // Check if user is allowed to join this group
+            User currentUser = UserService.getAuthenticatedUser();
+            if (currentUser != null) {
+                List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+                
+                // Find the target group
+                final Group foundGroup = userGroups.stream()
+                    .filter(group -> group.getId().equals(groupIdParam))
+                    .findFirst()
+                    .orElse(null);
+                
+                if (foundGroup != null) {
+                    currentGroupId = groupIdParam;
+                    
+                    // Use access() with runnable to ensure UI update is performed correctly
+                    UI.getCurrent().access(() -> {
+                        groupSelector.setValue(foundGroup);
+                        loadExistingMessages();
+                    });
+                } else {
+                    Notification.show("You are not a member of this group", 
+                        3000, Notification.Position.MIDDLE);
+                    event.forwardTo("chat");
+                }
+            }
+        }
+    } else {
+        // If no group is specified, try to select the first available group
+        User currentUser = UserService.getAuthenticatedUser();
+        if (currentUser != null) {
+            List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+            if (!userGroups.isEmpty()) {
+                UI.getCurrent().access(() -> {
+                    Group firstGroup = userGroups.get(0);
+                    currentGroupId = firstGroup.getId();
+                    groupSelector.setValue(firstGroup);
+                    loadExistingMessages();
+                });
+            }
         }
     }
+}
 
     private void loadThemePreference() {
         UI.getCurrent().getPage().executeJs(
@@ -246,11 +298,28 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
     @Override
     protected void onAttach(AttachEvent attachEvent) {
         super.onAttach(attachEvent);
-
+    
         registerWithBroadcaster();
-
+    
+        // Load existing messages after registration is complete
+        UI.getCurrent().access(() -> {
+            // Check if we need to select a group
+            if (currentGroupId == null && groupSelector != null && groupSelector.getValue() == null) {
+                User currentUser = UserService.getAuthenticatedUser();
+                if (currentUser != null) {
+                    List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+                    if (!userGroups.isEmpty()) {
+                        currentGroupId = userGroups.get(0).getId();
+                        groupSelector.setValue(userGroups.get(0));
+                    }
+                }
+            }
+            
+            loadExistingMessages();
+        });
+        
         checkForNewMessages();
-
+    
         UI ui = attachEvent.getUI();
         if (ui != null) {
             ui.setPollInterval(500); 
@@ -416,43 +485,42 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
         }
     }
 
-// Replace the following method in GroupChat.java:
-
-private void registerWithBroadcaster() {
-    UI ui = UI.getCurrent();
-    if (ui != null) {
-        if (broadcasterRegistration != null) {
-            broadcasterRegistration.remove();
-            broadcasterRegistration = null;
-        }
-
-        System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
-
-        // Using the new GroupMessageConsumer interface
-        broadcasterRegistration = GlobalMessageBroadcaster.register(ui, (message, groupId) -> {
-            if (ui.isAttached() && (currentGroupId != null && currentGroupId.equals(groupId))) {
-                ui.access(() -> {
-                    addMessageToChat(message);
-                    
-                    if (currentGroupId != null) {
-                        lastSeenMessageCount = Chatstorage.getGroupMessages(currentGroupId).size();
-                    }
-                    
-                    scrollToBottom();
-                    ui.push();
-                });
+    private void registerWithBroadcaster() {
+        UI ui = UI.getCurrent();
+        if (ui != null) {
+            if (broadcasterRegistration != null) {
+                broadcasterRegistration.remove();
+                broadcasterRegistration = null;
             }
-        });
 
-        if (broadcasterRegistration == null) {
-            System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
-            Notification.show("Failed to connect to the chat server. Please refresh the page.",
-                    3000, Notification.Position.MIDDLE);
+            System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
+
+            // Using the GroupMessageConsumer interface
+            broadcasterRegistration = GlobalMessageBroadcaster.register(ui, (message, groupId) -> {
+                if (ui.isAttached() && (currentGroupId != null && currentGroupId.equals(groupId))) {
+                    ui.access(() -> {
+                        addMessageToChat(message);
+                        
+                        if (currentGroupId != null) {
+                            lastSeenMessageCount = Chatstorage.getGroupMessages(currentGroupId).size();
+                        }
+                        
+                        scrollToBottom();
+                        ui.push();
+                    });
+                }
+            });
+
+            if (broadcasterRegistration == null) {
+                System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
+                Notification.show("Failed to connect to the chat server. Please refresh the page.",
+                        3000, Notification.Position.MIDDLE);
+            }
+        } else {
+            System.err.println("Cannot register with broadcaster - UI is null");
         }
-    } else {
-        System.err.println("Cannot register with broadcaster - UI is null");
     }
-}
+    
     public void ensureRegistration() {
         if (broadcasterRegistration == null || !GlobalMessageBroadcaster.isRegistered(UI.getCurrent())) {
             System.out.println("Re-registering with broadcaster after reconnection");
@@ -623,6 +691,10 @@ private void registerWithBroadcaster() {
             return;
         }
         
+        // Add message to storage first
+        Chatstorage.addGroupMessage(content, groupId);
+        
+        // Then broadcast to all UIs
         GlobalMessageBroadcaster.broadcastToGroup(content, groupId);
         
         UI ui = UI.getCurrent();
@@ -720,6 +792,7 @@ private void registerWithBroadcaster() {
         scrollToBottom();
     }
 
+       
     private Aes256 initializeEncryption() {
         try {
             byte[] key = new byte[32];
