@@ -16,7 +16,7 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.server.VaadinSession;
 
-import mu.smalltalk.GroupChat;
+import mu.smalltalk.Pages.GroupChat;
 import mu.smalltalk.Services.UserService;
 import mu.smalltalk.entitis.User;
 
@@ -183,10 +183,10 @@ public class LoginPage extends VerticalLayout {
                 );
                 
                 // IMPORTANT FIX: Store the username in session
-                VaadinSession.getCurrent().setAttribute("username", authenticatedUser.getUsername());
+                VaadinSession.getCurrent().setAttribute("username", authenticatedUser.getFullName());
                 // Also store fullName if available
                 if (authenticatedUser.getFullName() != null && !authenticatedUser.getFullName().isEmpty()) {
-                    VaadinSession.getCurrent().setAttribute("username", authenticatedUser.getFullName());
+                    VaadinSession.getCurrent().setAttribute("username", authenticatedUser.getEmail());
                 }
                 
                 // Clear any previous sessionId to ensure the new username is used
@@ -197,17 +197,18 @@ public class LoginPage extends VerticalLayout {
                     "localStorage.setItem('chat-session-id', $0);", 
                     authenticatedUser.getFullName() != null ? 
                         authenticatedUser.getFullName() : 
-                        authenticatedUser.getUsername());
+                        authenticatedUser.getEmail());
                 
                 // If successful, navigate to chat page
                 Notification.show("Login successful! Welcome, " + 
                     (authenticatedUser.getFullName() != null ? 
                         authenticatedUser.getFullName() : 
-                        authenticatedUser.getUsername()), 
+                        authenticatedUser.getEmail()), 
                     3000, Notification.Position.TOP_CENTER)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                 
-                getUI().ifPresent(ui -> ui.navigate(GroupChat.class));
+                 getUI().ifPresent(ui -> ui.navigate(GroupChat.class));
+
                 
             } catch (Exception ex) {
                 // Show error message

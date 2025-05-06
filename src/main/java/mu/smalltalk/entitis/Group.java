@@ -1,98 +1,48 @@
 package mu.smalltalk.entitis;
 
+import java.util.ArrayList;
 
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.util.UUID;
-
-public class Group {
-    private String id;
+@Document(collection = "groups")
+public class Group 
+{
+    @Id
     private String name;
-    private String description;
-    private String createdBy;
-    private long creationTimestamp;
+    private ArrayList<String> users;   // emails(user id) list
     
-    // Default constructor
-    public Group() {
-        this.id = UUID.randomUUID().toString();
-        this.creationTimestamp = System.currentTimeMillis();
-    }
-    
-    // Constructor with name and description
-    public Group(String name, String description) {
-        this();
+    public Group() { }
+
+    public Group(String name) 
+    {
         this.name = name;
-        this.description = description;
+        this.users = new ArrayList<>();
     }
-    
-    // Constructor with all fields
-    public Group(String id, String name, String description, String createdBy, long creationTimestamp) {
-        this.id = id;
-        this.name = name;
-        this.description = description;
-        this.createdBy = createdBy;
-        this.creationTimestamp = creationTimestamp;
+
+    public void addUserId(String userId)
+    {
+        users.add(userId);
     }
-    
-    // Getters and setters
-    public String getId() {
-        return id;
-    }
-    
-    public void setId(String id) {
-        this.id = id;
-    }
-    
+
     public String getName() {
         return name;
     }
-    
+
     public void setName(String name) {
         this.name = name;
     }
-    
-    public String getDescription() {
-        return description;
+
+    public ArrayList<String> getUsers() {
+        return users;
     }
-    
-    public void setDescription(String description) {
-        this.description = description;
+
+    public void setUsers(ArrayList<String> users) {
+        this.users = users;
     }
-    
-    public String getCreatedBy() {
-        return createdBy;
-    }
-    
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-    
-    public long getCreationTimestamp() {
-        return creationTimestamp;
-    }
-    
-    public void setCreationTimestamp(long creationTimestamp) {
-        this.creationTimestamp = creationTimestamp;
-    }
-    
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Group group = (Group) o;
-        return id.equals(group.id);
-    }
-    
-    @Override
-    public int hashCode() {
-        return id.hashCode();
-    }
-    
+
     @Override
     public String toString() {
-        return "Group{" +
-                "id='" + id + '\'' +
-                ", name='" + name + '\'' +
-                ", description='" + description + '\'' +
-                '}';
+        return "Group [name=" + name + ", users=" + users + "]";
     }
 }

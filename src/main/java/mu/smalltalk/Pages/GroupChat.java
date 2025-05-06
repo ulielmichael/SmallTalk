@@ -1,4 +1,4 @@
-package mu.smalltalk;
+package mu.smalltalk.Pages;
 
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
@@ -22,9 +22,11 @@ import com.vaadin.flow.router.RouteParameters;
 import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.shared.Registration;
 
+import mu.smalltalk.Aes256;
 import mu.smalltalk.Services.EncryptionService;
 import mu.smalltalk.Services.GlobalMessageBroadcaster;
-import mu.smalltalk.Services.GroupService;
+import mu.smalltalk.Services.MongoDbSerivce;
+// import mu.smalltalk.Services.GroupService;
 import mu.smalltalk.Services.UserService;
 import mu.smalltalk.entitis.Group;
 import mu.smalltalk.entitis.User;
@@ -38,8 +40,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-@Route("chat/:groupId?")
-public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
+@Route("chat")
+public class GroupChat extends VerticalLayout  {
 
     private final MessageInput messageInput;
     private final Upload mediaUpload;
@@ -55,6 +57,8 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
     private ComboBox<Group> groupSelector;
     private String currentGroupId = null;
 
+
+
     private int lastSeenMessageCount = 0;
     
     // Add a refresh button for the chat
@@ -68,6 +72,7 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
 
     public GroupChat() {
         sessionId = initializeSessionId();
+
 
         aes = initializeEncryption();
         encryptionService = new EncryptionService(aes);
@@ -100,7 +105,7 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
         
         // Create refresh button
         refreshButton = new Button("Refresh Chat");
-        refreshButton.addClickListener(e -> refreshChatHistory());
+        // refreshButton.addClickListener(e -> refreshChatHistory());
         
         // Create theme toggle button
         themeToggleButton = new Button("DARK MODE");
@@ -125,34 +130,34 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
         
         // Create new group button
         Button newGroupButton = new Button("Create New Group");
-        newGroupButton.addClickListener(e -> createNewGroup());
+        // newGroupButton.addClickListener(e -> createNewGroup());
         
-        // Fill the group selector with the groups the user belongs to
-        if (currentUser != null) {
-            List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+        // // Fill the group selector with the groups the user belongs to
+        // if (currentUser != null) {
+        //     List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
             
-            // If no groups exist, create a default group for this user
-            if (userGroups.isEmpty()) {
-                System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
-                Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
-                userGroups = GroupService.getUserGroups(currentUser.getId());
-            }
+        //     // If no groups exist, create a default group for this user
+        //     if (userGroups.isEmpty()) {
+        //         System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
+        //         Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
+        //         userGroups = GroupService.getUserGroups(currentUser.getId());
+        //     }
             
-            groupSelector.setItems(userGroups);
+        //     groupSelector.setItems(userGroups);
             
-            // Set the first group as default if available
-            if (!userGroups.isEmpty()) {
-                System.out.println("Setting default group: " + userGroups.get(0).getName());
-                groupSelector.setValue(userGroups.get(0));
-                currentGroupId = userGroups.get(0).getId();
-            }
-        }
+        //     // Set the first group as default if available
+        //     if (!userGroups.isEmpty()) {
+        //         System.out.println("Setting default group: " + userGroups.get(0).getName());
+        //         groupSelector.setValue(userGroups.get(0));
+        //         currentGroupId = userGroups.get(0).getId();
+        //     }
+        // }
         
         groupSelector.addValueChangeListener(event -> {
             if (event.getValue() != null) {
-                currentGroupId = event.getValue().getId();
-                refreshChatHistory();
-                updateUserList(); // Update user list when group changes
+                // currentGroupId = event.getValue().get();
+                // refreshChatHistory();
+                // updateUserList(); // Update user list when group changes
                 
                 // Update the chat title with the group name
                 getChildren().forEach(component -> {
@@ -210,153 +215,153 @@ public class GroupChat extends VerticalLayout implements BeforeEnterObserver {
     }
 
  
-@Override
-public void beforeEnter(BeforeEnterEvent event) {
-    if (!UserService.isUserAuthenticated()) {
-        event.forwardTo("login");  
+// @Override
+// public void beforeEnter(BeforeEnterEvent event) {
+//     if (!UserService.isUserAuthenticated()) {
+//         event.forwardTo("login");  
         
-        Notification.show("Please log in to access the chat", 
-                       3000, Notification.Position.MIDDLE);
-        return;
-    }
+//         Notification.show("Please log in to access the chat", 
+//                        3000, Notification.Position.MIDDLE);
+//         return;
+//     }
     
     // Handle group ID parameter if present
-    List<String> segments = event.getLocation().getSegments();
-    if (segments.size() > 1) {
-        String groupIdParam = segments.get(1);
-        if (groupIdParam != null && !groupIdParam.isEmpty()) {
-            // Check if user is allowed to join this group
-            User currentUser = UserService.getAuthenticatedUser();
-            if (currentUser != null) {
-                final List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+    // List<String> segments = event.getLocation().getSegments();
+    // if (segments.size() > 1) {
+    //     String groupIdParam = segments.get(1);
+    //     if (groupIdParam != null && !groupIdParam.isEmpty()) {
+    //         // Check if user is allowed to join this group
+    //         User currentUser = UserService.getAuthenticatedUser();
+            // if (currentUser != null) {
+            //     // final List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
                 
-                // Find the target group
-                final Group foundGroup = userGroups.stream()
-                    .filter(group -> group.getId().equals(groupIdParam))
-                    .findFirst()
-                    .orElse(null);
+            //     // Find the target group
+            //     final Group foundGroup = userGroups.stream()
+            //         .filter(group -> group.getId().equals(groupIdParam))
+            //         .findFirst()
+            //         .orElse(null);
                 
-                if (foundGroup != null) {
-                    currentGroupId = groupIdParam;
+            //     if (foundGroup != null) {
+            //         currentGroupId = groupIdParam;
                     
-                    // Use access() with runnable to ensure UI update is performed correctly
-                    UI.getCurrent().access(() -> {
-                        groupSelector.setValue(foundGroup);
-                        loadExistingMessages();
-                        updateUserList();
-                    });
-                } else {
-                    Notification.show("You are not a member of this group", 
-                        3000, Notification.Position.MIDDLE);
-                    event.forwardTo("chat");
-                }
-            }
-        }
-    } else {
-        // If no group is specified, try to select the first available group
-        User currentUser = UserService.getAuthenticatedUser();
-        if (currentUser != null) {
-            final List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+            //         // Use access() with runnable to ensure UI update is performed correctly
+            //         UI.getCurrent().access(() -> {
+            //             groupSelector.setValue(foundGroup);
+            //             loadExistingMessages();
+            //             updateUserList();
+            //         });
+            //     } else {
+            //         Notification.show("You are not a member of this group", 
+            //             3000, Notification.Position.MIDDLE);
+            //         event.forwardTo("chat");
+            //     }
+            // }
+//         }
+//     } else {
+//         // If no group is specified, try to select the first available group
+//         User currentUser = UserService.getAuthenticatedUser();
+//         if (currentUser != null) {
+//             final List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
             
-            // Create a default group if no groups exist
-            if (userGroups.isEmpty()) {
-                System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
-                final Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
-                final List<Group> updatedUserGroups = GroupService.getUserGroups(currentUser.getId());
+//             // Create a default group if no groups exist
+//             if (userGroups.isEmpty()) {
+//                 System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
+//                 final Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
+//                 final List<Group> updatedUserGroups = GroupService.getUserGroups(currentUser.getId());
                 
-                UI.getCurrent().access(() -> {
-                    if (!updatedUserGroups.isEmpty()) {
-                        Group firstGroup = updatedUserGroups.get(0);
-                        currentGroupId = firstGroup.getId();
-                        groupSelector.setItems(updatedUserGroups); // Refresh the items
-                        groupSelector.setValue(firstGroup);
-                        loadExistingMessages();
-                        updateUserList();
-                    }
-                });
-            } else {
-                UI.getCurrent().access(() -> {
-                    if (!userGroups.isEmpty()) {
-                        Group firstGroup = userGroups.get(0);
-                        currentGroupId = firstGroup.getId();
-                        groupSelector.setItems(userGroups); // Refresh the items
-                        groupSelector.setValue(firstGroup);
-                        loadExistingMessages();
-                        updateUserList();
-                    }
-                });
-            }
-        }
-    }
-}
+//                 UI.getCurrent().access(() -> {
+//                     if (!updatedUserGroups.isEmpty()) {
+//                         Group firstGroup = updatedUserGroups.get(0);
+//                         currentGroupId = firstGroup.getId();
+//                         groupSelector.setItems(updatedUserGroups); // Refresh the items
+//                         groupSelector.setValue(firstGroup);
+//                         loadExistingMessages();
+//                         updateUserList();
+//                     }
+//                 });
+//             } else {
+//                 UI.getCurrent().access(() -> {
+//                     if (!userGroups.isEmpty()) {
+//                         Group firstGroup = userGroups.get(0);
+//                         currentGroupId = firstGroup.getId();
+//                         groupSelector.setItems(userGroups); // Refresh the items
+//                         groupSelector.setValue(firstGroup);
+//                         loadExistingMessages();
+//                         updateUserList();
+//                     }
+//                 });
+//             }
+//         }
+//     }
+// }
 
-    private void createNewGroup() {
-        User currentUser = UserService.getAuthenticatedUser();
-        if (currentUser != null) {
-            // Create a simple dialog to enter group name
-            // In a real app, this would be a proper dialog component
-            String groupName = "New Group " + new Date().getTime();
-            Group newGroup = GroupService.createGroup(groupName, currentUser.getId());
+    // private void createNewGroup() {
+    //     User currentUser = UserService.getAuthenticatedUser();
+    //     if (currentUser != null) {
+    //         // Create a simple dialog to enter group name
+    //         // In a real app, this would be a proper dialog component
+    //         String groupName = "New Group " + new Date().getTime();
+    //         // Group newGroup = GroupService.createGroup(groupName, currentUser.getId());
             
-            if (newGroup != null) {
-                // Refresh the group selector
-                List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
-                groupSelector.setItems(userGroups);
-                groupSelector.setValue(newGroup);
+    //         if (newGroup != null) {
+    //             // Refresh the group selector
+    //             List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+    //             groupSelector.setItems(userGroups);
+    //             groupSelector.setValue(newGroup);
                 
-                Notification.show("Group created: " + groupName, 
-                    2000, Notification.Position.MIDDLE);
-            }
-        }
-    }
+    //             Notification.show("Group created: " + groupName, 
+    //                 2000, Notification.Position.MIDDLE);
+    //         }
+    //     }
+    // }
 
-    private void updateUserList() {
-        if (currentGroupId == null) {
-            return;
-        }
+    // private void updateUserList() {
+    //     if (currentGroupId == null) {
+    //         return;
+    //     }
         
-        User currentUser = UserService.getAuthenticatedUser();
-        if (currentUser == null) {
-            return;
-        }
+    //     User currentUser = UserService.getAuthenticatedUser();
+    //     if (currentUser == null) {
+    //         return;
+    //     }
         
-        // Clear previous list
-        userListContainer.removeAll();
+    //     // Clear previous list
+    //     userListContainer.removeAll();
         
-        // Get users for the current group
-        List<User> groupUsers = GroupService.getGroupUsers(currentGroupId);
+    //     // Get users for the current group
+    //     List<User> groupUsers = GroupService.getGroupUsers(currentGroupId);
         
-        // Display users in the container
-        if (groupUsers.isEmpty()) {
-            Div noUsersDiv = new Div();
-            noUsersDiv.setText("No members in this group");
-            userListContainer.add(noUsersDiv);
-        } else {
-            HorizontalLayout userLayout = new HorizontalLayout();
-            userLayout.setWidthFull();
-            userLayout.getStyle().set("flex-wrap", "wrap");
+    //     // Display users in the container
+    //     if (groupUsers.isEmpty()) {
+    //         Div noUsersDiv = new Div();
+    //         noUsersDiv.setText("No members in this group");
+    //         userListContainer.add(noUsersDiv);
+    //     } else {
+    //         HorizontalLayout userLayout = new HorizontalLayout();
+    //         userLayout.setWidthFull();
+    //         userLayout.getStyle().set("flex-wrap", "wrap");
             
-            for (User user : groupUsers) {
-                Div userDiv = new Div();
-                userDiv.setText(user.getFullName());
-                userDiv.getStyle().set("margin", "5px");
-                userDiv.getStyle().set("padding", "5px 10px");
-                userDiv.getStyle().set("border-radius", "15px");
+    //         for (User user : groupUsers) {
+    //             Div userDiv = new Div();
+    //             userDiv.setText(user.getFullName());
+    //             userDiv.getStyle().set("margin", "5px");
+    //             userDiv.getStyle().set("padding", "5px 10px");
+    //             userDiv.getStyle().set("border-radius", "15px");
                 
-                // Highlight current user
-                if (user.getId().equals(currentUser.getId())) {
-                    userDiv.getStyle().set("background-color", isDarkMode ? "#4a5568" : "#bee3f8");
-                    userDiv.getStyle().set("font-weight", "bold");
-                } else {
-                    userDiv.getStyle().set("background-color", isDarkMode ? "#2d3748" : "#e2e8f0");
-                }
+    //             // Highlight current user
+    //             if (user.getId().equals(currentUser.getId())) {
+    //                 userDiv.getStyle().set("background-color", isDarkMode ? "#4a5568" : "#bee3f8");
+    //                 userDiv.getStyle().set("font-weight", "bold");
+    //             } else {
+    //                 userDiv.getStyle().set("background-color", isDarkMode ? "#2d3748" : "#e2e8f0");
+    //             }
                 
-                userLayout.add(userDiv);
-            }
+    //             userLayout.add(userDiv);
+    //         }
             
-            userListContainer.add(userLayout);
-        }
-    }
+    //         userListContainer.add(userLayout);
+    //     }
+    // }
 
     private void loadThemePreference() {
         UI.getCurrent().getPage().executeJs(
@@ -390,8 +395,8 @@ public void beforeEnter(BeforeEnterEvent event) {
         UI.getCurrent().getPage().executeJs(
                 "localStorage.setItem('chat-theme-preference', $0);", isDarkMode ? "dark" : "light");
                 
-        refreshChatHistory();
-        updateUserList(); // Update user list when theme changes
+        // refreshChatHistory();
+        // updateUserList(); // Update user list when theme changes
     }
     
     private void applyDarkMode() {
@@ -422,46 +427,46 @@ public void beforeEnter(BeforeEnterEvent event) {
         messageInput.getStyle().set("color", "#333");
     }
 
-    @Override
-    protected void onAttach(AttachEvent attachEvent) {
-        super.onAttach(attachEvent);
+    // @Override
+    // protected void onAttach(AttachEvent attachEvent) {
+    //     super.onAttach(attachEvent);
     
-        registerWithBroadcaster();
+    //     registerWithBroadcaster();
     
-        // Load existing messages after registration is complete
-        UI.getCurrent().access(() -> {
-            // Check if we need to select a group
-            if (currentGroupId == null && groupSelector != null && groupSelector.getValue() == null) {
-                User currentUser = UserService.getAuthenticatedUser();
-                if (currentUser != null) {
-                    List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
+    //     // Load existing messages after registration is complete
+    //     UI.getCurrent().access(() -> {
+    //         // Check if we need to select a group
+    //         if (currentGroupId == null && groupSelector != null && groupSelector.getValue() == null) {
+    //             User currentUser = UserService.getAuthenticatedUser();
+    //             if (currentUser != null) {
+    //                 List<Group> userGroups = GroupService.getUserGroups(currentUser.getId());
                     
-                    // Create a default group if no groups exist
-                    if (userGroups.isEmpty()) {
-                        System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
-                        Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
-                        userGroups = GroupService.getUserGroups(currentUser.getId());
-                    }
+    //                 // Create a default group if no groups exist
+    //                 if (userGroups.isEmpty()) {
+    //                     System.out.println("No groups found for user " + currentUser.getId() + ", creating a default group");
+    //                     Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getId());
+    //                     userGroups = GroupService.getUserGroups(currentUser.getId());
+    //                 }
                     
-                    if (!userGroups.isEmpty()) {
-                        currentGroupId = userGroups.get(0).getId();
-                        groupSelector.setItems(userGroups); // Refresh the items
-                        groupSelector.setValue(userGroups.get(0));
-                    }
-                }
-            }
+    //                 if (!userGroups.isEmpty()) {
+    //                     currentGroupId = userGroups.get(0).getId();
+    //                     groupSelector.setItems(userGroups); // Refresh the items
+    //                     groupSelector.setValue(userGroups.get(0));
+    //                 }
+    //             }
+    //         }
             
-            loadExistingMessages();
-            updateUserList();
-        });
+    //         loadExistingMessages();
+    //         updateUserList();
+    //     });
         
-        checkForNewMessages();
+    //     checkForNewMessages();
     
-        UI ui = attachEvent.getUI();
-        if (ui != null) {
-            ui.setPollInterval(500); 
-        }
-    }
+    //     UI ui = attachEvent.getUI();
+    //     if (ui != null) {
+    //         ui.setPollInterval(500); 
+    //     }
+    // }
 
     @Override
     protected void onDetach(DetachEvent detachEvent) {
@@ -473,34 +478,34 @@ public void beforeEnter(BeforeEnterEvent event) {
         }
     }
 
-    private void loadExistingMessages() {
-        if (currentGroupId == null) {
-            return;
-        }
+    // private void loadExistingMessages() {
+    //     if (currentGroupId == null) {
+    //         return;
+    //     }
         
-        List<String> existingMessages = Chatstorage.getGroupMessages(currentGroupId);
+    //     // List<String> existingMessages = Chatstorage.getGroupMessages(currentGroupId);
         
-        chatContainer.removeAll();
+    //     chatContainer.removeAll();
         
-        for (String message : existingMessages) {
-            addMessageToChat(message);
-        }
-        lastSeenMessageCount = existingMessages.size();
+    //     for (String message : existingMessages) {
+    //         addMessageToChat(message);
+    //     }
+    //     lastSeenMessageCount = existingMessages.size();
 
-        scrollToBottom();
-    }
+    //     scrollToBottom();
+    // }
     
-    private void refreshChatHistory() {
-        UI ui = UI.getCurrent();
-        if (ui != null && ui.isAttached()) {
-            ui.access(() -> {
-                loadExistingMessages();
-                updateUserList();
-                ui.push();
-                Notification.show("Chat refreshed", 2000, Notification.Position.BOTTOM_CENTER);
-            });
-        }
-    }
+    // private void refreshChatHistory() {
+    //     UI ui = UI.getCurrent();
+    //     if (ui != null && ui.isAttached()) {
+    //         ui.access(() -> {
+    //             loadExistingMessages();
+    //             updateUserList();
+    //             ui.push();
+    //             Notification.show("Chat refreshed", 2000, Notification.Position.BOTTOM_CENTER);
+    //         });
+    //     }
+    // }
 
     private void setupMessageHandler() {
         UI currentUI = UI.getCurrent();
@@ -586,43 +591,43 @@ public void beforeEnter(BeforeEnterEvent event) {
         }
     }
 
-    public void handleChatUpdate(String timestamp) {
-        UI ui = UI.getCurrent();
-        if (ui != null && ui.isAttached()) {
-            ui.access(() -> {
-                checkForNewMessages();
-                updateUserList();
-                ui.push();
-            });
-        }
-    }
+    // public void handleChatUpdate(String timestamp) {
+    //     UI ui = UI.getCurrent();
+    //     if (ui != null && ui.isAttached()) {
+    //         ui.access(() -> {
+    //             checkForNewMessages();
+    //             // updateUserList();
+    //             ui.push();
+    //         });
+    //     }
+    // }
 
-    public void checkForNewMessages() {
-        if (currentGroupId == null) {
-            return;
-        }
+    // public void checkForNewMessages() {
+    //     if (currentGroupId == null) {
+    //         return;
+    //     }
         
-        UI ui = UI.getCurrent();
-        if (ui != null && ui.isAttached()) {
-            ui.access(() -> {
-                List<String> allMessages = Chatstorage.getGroupMessages(currentGroupId);
-                int currentMessageCount = allMessages.size();
+    //     UI ui = UI.getCurrent();
+    //     if (ui != null && ui.isAttached()) {
+    //         ui.access(() -> {
+    //             // List<String> allMessages = Chatstorage.getGroupMessages(currentGroupId);
+    //             int currentMessageCount = allMessages.size();
 
-                if (currentMessageCount > lastSeenMessageCount) {
-                    for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
-                        addMessageToChat(allMessages.get(i));
-                    }
-                    lastSeenMessageCount = currentMessageCount;
+    //             if (currentMessageCount > lastSeenMessageCount) {
+    //                 for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
+    //                     addMessageToChat(allMessages.get(i));
+    //                 }
+    //                 lastSeenMessageCount = currentMessageCount;
 
-                    scrollToBottom();
+    //                 scrollToBottom();
                     
-                    ui.getPage().executeJs("window.notifyOtherWindows();");
+    //                 ui.getPage().executeJs("window.notifyOtherWindows();");
                     
-                    ui.push();
-                }
-            });
-        }
-    }
+    //                 ui.push();
+    //             }
+    //         });
+    //     }
+    // }
 
     private void registerWithBroadcaster() {
         UI ui = UI.getCurrent();
@@ -635,20 +640,20 @@ public void beforeEnter(BeforeEnterEvent event) {
             System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
 
             // Using the GroupMessageConsumer interface
-            broadcasterRegistration = GlobalMessageBroadcaster.register(ui, (message, groupId) -> {
-                if (ui.isAttached() && (currentGroupId != null && currentGroupId.equals(groupId))) {
-                    ui.access(() -> {
-                        addMessageToChat(message);
+            // broadcasterRegistration = GlobalMessageBroadcaster.register(ui, (message, groupId) -> {
+            //     if (ui.isAttached() && (currentGroupId != null && currentGroupId.equals(groupId))) {
+            //         ui.access(() -> {
+            //             addMessageToChat(message);
                         
-                        if (currentGroupId != null) {
-                            lastSeenMessageCount = Chatstorage.getGroupMessages(currentGroupId).size();
-                        }
+            //             if (currentGroupId != null) {
+            //                 lastSeenMessageCount = Chatstorage.getGroupMessages(currentGroupId).size();
+            //             }
                         
-                        scrollToBottom();
-                        ui.push();
-                    });
-                }
-            });
+            //             scrollToBottom();
+            //             ui.push();
+            //         });
+            //     }
+            // });
 
             if (broadcasterRegistration == null) {
                 System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
@@ -666,7 +671,7 @@ public void beforeEnter(BeforeEnterEvent event) {
             registerWithBroadcaster();
         }
 
-        checkForNewMessages();
+        // checkForNewMessages();
     }
 
     private String initializeSessionId() {
@@ -824,7 +829,7 @@ public void beforeEnter(BeforeEnterEvent event) {
         }
         
         // Store message in the group's chat history
-        Chatstorage.addGroupMessage(groupId, message);
+        // Chatstorage.addGroupMessage(groupId, message);
         
         // Broadcast message to all connected clients
         GlobalMessageBroadcaster.broadcastToGroup(message, groupId);

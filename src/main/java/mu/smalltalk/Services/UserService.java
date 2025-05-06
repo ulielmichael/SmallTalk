@@ -92,7 +92,7 @@ public class UserService {
             
             // Save the user to the database
             User savedUser = userRepository.save(user);
-            System.out.println("User saved successfully with ID: " + savedUser.getId());
+            System.out.println("User saved successfully with ID: " + savedUser.getEmail());
             
             return savedUser;
         } catch (Exception e) {
@@ -120,12 +120,13 @@ public class UserService {
             System.out.println("User found: " + user);
             
             // Check if password matches
-            if (passwordEncoder.matches(password, user.getPassword())) {
+            if (user.getPassword().equals(password)) 
+            {
                 System.out.println("Password matched for user: " + email);
                 
                 // Update last login time
-                user.setLastLogin(LocalDateTime.now());
-                userRepository.save(user);
+                // user.setLastLogin(LocalDateTime.now());
+                // userRepository.save(user);
                 
                 // Set the current authenticated user
                 VaadinSession session = VaadinSession.getCurrent();
@@ -136,6 +137,22 @@ public class UserService {
             } else {
                 System.out.println("Password did not match for user: " + email);
             }
+            // if (passwordEncoder.matches(password, user.getPassword())) {
+            //     System.out.println("Password matched for user: " + email);
+                
+            //     // Update last login time
+            //     // user.setLastLogin(LocalDateTime.now());
+            //     userRepository.save(user);
+                
+            //     // Set the current authenticated user
+            //     VaadinSession session = VaadinSession.getCurrent();
+            //     session.setAttribute(USER_KEY, user);
+            //     session.setAttribute(USERNAME_KEY, user.getEmail());
+                
+            //     return user;
+            // } else {
+            //     System.out.println("Password did not match for user: " + email);
+            // }
         } else {
             System.out.println("No user found with email: " + email);
         }
@@ -153,7 +170,7 @@ public class UserService {
     
     // Method to update user's profile picture
     public void updateProfilePicture(User user) {
-        if (user != null && user.getId() != null) {
+        if (user != null && user.getEmail() != null) {
             userRepository.save(user);
         } else {
             throw new IllegalArgumentException("User or ID cannot be null");
@@ -166,7 +183,7 @@ public class UserService {
             Optional<User> userOptional = userRepository.findById(userId);
             if (userOptional.isPresent()) {
                 User user = userOptional.get();
-                user.setProfilePic(profilePicData);
+                // user.setProfilePic(profilePicData);
                 userRepository.save(user);
             } else {
                 throw new RuntimeException("User not found with ID: " + userId);
@@ -182,7 +199,7 @@ public class UserService {
             Optional<User> userOptional = userRepository.findByEmail(email);
             if (userOptional.isPresent()) {
                 User user = userOptional.get();
-                user.setProfilePic(profilePicData);
+                // user.setProfilePic(profilePicData);
                 userRepository.save(user);
             } else {
                 throw new RuntimeException("User not found with email: " + email);
@@ -192,8 +209,8 @@ public class UserService {
         }
     }
 
-    public static User getUserById(String user1Id) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getUserById'");
-    }
+    // public static User getUserById(String user1Id) {
+    //     // TODO Auto-generated method stub
+    //     throw new UnsupportedOperationException("Unimplemented method 'getUserById'");
+    // }
 }
