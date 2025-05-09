@@ -1,6 +1,7 @@
 package mu.smalltalk.entitis;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -11,6 +12,7 @@ public class Group
     @Id
     private String name;
     private ArrayList<String> users;   // emails(user id) list
+    private ArrayList memberIds;
     
     public Group() { }
 
@@ -28,7 +30,11 @@ public class Group
     public String getName() {
         return name;
     }
+    public String getId() {
+        return this.name;
+    }
 
+    
     public void setName(String name) {
         this.name = name;
     }
@@ -44,5 +50,14 @@ public class Group
     @Override
     public String toString() {
         return "Group [name=" + name + ", users=" + users + "]";
+    }
+
+    
+
+    public List<String> getMemberIds() {
+        if (memberIds == null) {
+            memberIds = new ArrayList<>();
+        }
+        return getMemberIds();
     }
 }

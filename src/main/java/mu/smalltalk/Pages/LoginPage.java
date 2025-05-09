@@ -16,7 +16,7 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.server.VaadinSession;
 
-import mu.smalltalk.Pages.GroupChat;
+import mu.smalltalk.Pages.Chatpage;
 import mu.smalltalk.Services.UserService;
 import mu.smalltalk.entitis.User;
 
@@ -207,7 +207,7 @@ public class LoginPage extends VerticalLayout {
                     3000, Notification.Position.TOP_CENTER)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                 
-                 getUI().ifPresent(ui -> ui.navigate(GroupChat.class));
+                 getUI().ifPresent(ui -> ui.navigate(Chatpage.class));
 
                 
             } catch (Exception ex) {

@@ -1,4 +1,4 @@
-package mu.smalltalk;
+package mu.smalltalk.secriuty;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,11 +11,14 @@ public class Aes256 {
     private static final int Nk = 8;
     private static final int Nr = 14;
 
+    public Aes256() {
+    }
+
     public Aes256(byte[] key) {
         if (key.length != 32) {
             throw new IllegalArgumentException("Invalid key length (should be 32 bytes)");
         }
-        expandedKey = expandKey(key);
+        // expandedKey = expandKey(key);
     }
 
     private static final int[] SBOX = {

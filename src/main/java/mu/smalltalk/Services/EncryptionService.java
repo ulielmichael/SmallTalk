@@ -4,7 +4,8 @@ import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import mu.smalltalk.Aes256;
+
+import mu.smalltalk.secriuty.Aes256;
 
 public class EncryptionService {
 

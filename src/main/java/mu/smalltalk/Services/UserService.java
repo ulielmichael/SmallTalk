@@ -10,11 +10,13 @@ import mu.smalltalk.repositoriy.UserRepository;
 import com.vaadin.flow.server.VaadinSession;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Service
 public class UserService {
-    private final UserRepository userRepository;
+    private static UserRepository userRepository = null;
     private final BCryptPasswordEncoder passwordEncoder;
     
     // קבועים לשימוש בניהול השיחה
@@ -23,7 +25,7 @@ public class UserService {
     
     @Autowired
     public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
+        UserService.userRepository = userRepository;
         this.passwordEncoder = new BCryptPasswordEncoder();
         System.out.println("UserService initialized with repository: " + userRepository);
     }
@@ -193,7 +195,6 @@ public class UserService {
         }
     }
     
-    // מתודה נוספת שמאפשרת חיפוש לפי אימייל ועדכון תמונת פרופיל
     public void updateProfilePictureByEmail(String email, String profilePicData) {
         if (email != null && !email.trim().isEmpty()) {
             Optional<User> userOptional = userRepository.findByEmail(email);
@@ -209,8 +210,18 @@ public class UserService {
         }
     }
 
-    // public static User getUserById(String user1Id) {
-    //     // TODO Auto-generated method stub
-    //     throw new UnsupportedOperationException("Unimplemented method 'getUserById'");
-    // }
+
+    public static User getUserById(String email) {
+        if (email == null || email.isEmpty()) {
+            return null;
+        }
+        return null;
+   }
+
+public static List<User> getAllUsers() {
+    List<User> users = new ArrayList<>();
+    userRepository.findAll().forEach(users::add);
+    return users;
+}
+   
 }

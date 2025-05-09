@@ -103,7 +103,7 @@ public class Chatstorage {
         if (groupId == null) {
             return;
         }
-        
+            
         List<String> groupMessageList = groupMessages.get(groupId);
         if (groupMessageList != null) {
             synchronized (groupMessageList) {
