@@ -46,6 +46,12 @@ public class Group
     public void setUsers(ArrayList<String> users) {
         this.users = users;
     }
+       public List<String> getMemberIds() {
+        if (memberIds == null) {
+            memberIds = new ArrayList<>();
+        }
+        return getMemberIds();
+    }
 
     @Override
     public String toString() {
@@ -54,10 +60,5 @@ public class Group
 
     
 
-    public List<String> getMemberIds() {
-        if (memberIds == null) {
-            memberIds = new ArrayList<>();
-        }
-        return getMemberIds();
-    }
+ 
 }

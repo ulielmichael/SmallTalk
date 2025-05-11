@@ -40,21 +40,19 @@ public class GroupService {
                 .collect(Collectors.toList());
     }
     
-    /**
-     * Create a new group with the specified name and add the creator as the first member
-     */
+  
     public static Group createGroup(String groupName, String creatorId) {
-        // Check if group already exists
+        // Check if group already exists ?
         Optional<Group> existingGroup = groupRepository.findById(groupName);
         if (existingGroup.isPresent()) {
             throw new IllegalArgumentException("Group with name '" + groupName + "' already exists");
         }
         
-        // Create new group
+        // hhhh new group
         Group newGroup = new Group(groupName);
         newGroup.addUserId(creatorId);
         
-        // Save to database
+        // Save to db
         if (mongoDbService != null) {
             mongoDbService.addGroupToDB(newGroup);
         } else {
@@ -80,7 +78,7 @@ public class GroupService {
         
         Group group = groupOpt.get();
         
-        // Check if user is already in the group
+        // Check if user is already in the group ? 
         if (group.getUsers().contains(userEmail)) {
             return true; // User is already in the group
         }
