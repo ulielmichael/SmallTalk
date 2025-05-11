@@ -835,16 +835,20 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     }
     
     private Aes256 initializeEncryption() {
-        try {
-            return new Aes256();
-        } catch (Exception e) {
-            e.printStackTrace();
-            Notification.show("Error initializing encryption: " + e.getMessage(),
-                    3000, Notification.Position.MIDDLE);
-            return null;
+    try {
+        byte[] key = new byte[32];
+        for (int i = 0; i < key.length; i++) {
+            key[i] = (byte) i;
         }
+        
+        return new Aes256(key);
+    } catch (Exception e) {
+        e.printStackTrace();
+        Notification.show("Error initializing encryption: " + e.getMessage(),
+                3000, Notification.Position.MIDDLE);
+        return null;
     }
-    
+}
     private void updateUserList() {
         if (currentGroupId == null) {
             return;
@@ -1045,7 +1049,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         }
     }
     
-    // Static class to store chat messages for each group
     private static class ChatStorage {
         private static final Map<String, List<String>> groupMessages = new HashMap<>();
         
