@@ -837,6 +837,7 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     private Aes256 initializeEncryption() {
     try {
         byte[] key = new byte[32];
+      
         for (int i = 0; i < key.length; i++) {
             key[i] = (byte) i;
         }
