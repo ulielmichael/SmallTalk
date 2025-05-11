@@ -64,9 +64,7 @@ public class GroupService {
         return newGroup;
     }
     
-    /**
-     * Add a user to an existing group
-     */
+   
     public static boolean addUserToGroup(String userEmail, String groupId) {
         // Verify user exists
         Optional<User> user = userRepository.findById(userEmail);
@@ -94,16 +92,12 @@ public class GroupService {
         return true;
     }
     
-    /**
-     * Get a group by its ID
-     */
+    
     public static Group getGroupById(String groupId) {
         return groupRepository.findById(groupId).orElse(null);
     }
     
-    /**
-     * Remove a user from a group
-     */
+   
     public static boolean removeUserFromGroup(String userId, String groupName) {
         Optional<Group> groupOpt = groupRepository.findById(groupName);
         if (groupOpt.isEmpty()) {
@@ -124,9 +118,7 @@ public class GroupService {
         return true;
     }
     
-    /**
-     * Get all members of a group
-     */
+ 
     public static List<User> getGroupMembers(String groupName) {
         Optional<Group> groupOpt = groupRepository.findById(groupName);
         if (groupOpt.isEmpty()) {
@@ -136,7 +128,7 @@ public class GroupService {
         Group group = groupOpt.get();
         List<String> userIds = group.getUsers();
         
-        // Find all users with these IDs
+       
         return userIds.stream()
                 .map(id -> userRepository.findById(id))
                 .filter(Optional::isPresent)
@@ -144,9 +136,7 @@ public class GroupService {
                 .collect(Collectors.toList());
     }
     
-    /**
-     * Check if a user is a member of a group
-     */
+
     public static boolean isUserInGroup(String userId, String groupName) {
         Optional<Group> groupOpt = groupRepository.findById(groupName);
         if (groupOpt.isEmpty()) {
@@ -156,18 +146,14 @@ public class GroupService {
         return groupOpt.get().getUsers().contains(userId);
     }
     
-    /**
-     * Get all available groups
-     */
+
     public static List<Group> getAllGroups() {
         List<Group> groups = new ArrayList<>();
         groupRepository.findAll().forEach(groups::add);
         return groups;
     }
     
-    /**
-     * Delete a group
-     */
+    
     public static boolean deleteGroup(String groupName) {
         if (!groupRepository.existsById(groupName)) {
             return false;

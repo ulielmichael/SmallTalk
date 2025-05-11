@@ -18,7 +18,7 @@ public class Aes256 {
         if (key.length != 32) {
             throw new IllegalArgumentException("Invalid key length (should be 32 bytes)");
         }
-        // expandedKey = expandKey(key);
+        expandedKey = expandKey(key);
     }
 
     private static final int[] SBOX = {
@@ -118,7 +118,7 @@ public class Aes256 {
             0x6c, 0xd8, 0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63, 0xc6
     };
 
-    private int[] expandedKey;
+    private int[]       expandedKey;
 
     private int[] expandKey(byte[] key) {
         int[] w = new int[Nb * (Nr + 1)];
