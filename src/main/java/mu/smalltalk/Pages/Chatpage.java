@@ -164,27 +164,14 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         }
         
         groupSelector.addValueChangeListener(event -> {
+            System.out.println("Selected Group: " + event.getValue());
+            
             if (event.getValue() != null) {
                 currentGroupId = event.getValue().getId();
+                System.out.println("Current Group ID set to: " + currentGroupId);
+                
                 refreshChatHistory();
-                updateUserList(); // Update user list when group changes
-                
-                // Update the chat title with the group name
-                getChildren().forEach(component -> {
-                    if (component instanceof HorizontalLayout) {
-                        HorizontalLayout layout = (HorizontalLayout) component;
-                        layout.getChildren().forEach(child -> {
-                            if (child instanceof H2) {
-                                ((H2) child).setText(displayName + " - " + event.getValue().getName());
-                            }
-                        });
-                    }
-                });
-                
-                // Update URL to reflect the selected group
-                if (UI.getCurrent() != null) {
-                    UI.getCurrent().navigate("chat/" + currentGroupId);
-                }
+                updateUserList(); 
             }
         });
         
@@ -626,7 +613,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                 HorizontalLayout layout = (HorizontalLayout) component;
                 layout.getChildren().forEach(child -> {
                     if (child instanceof H2) {
-                        // If we have a group selected, show both the username and group name
                         if (groupSelector != null && groupSelector.getValue() != null) {
                             ((H2) child).setText(id + " - " + groupSelector.getValue().getName());
                         } else {
@@ -850,69 +836,71 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         return null;
     }
 }
-    private void updateUserList() {
-        if (currentGroupId == null) {
-            return;
-        }
-        
-        // Clear previous list
-        userListContainer.removeAll();
-        
-        // Get group members
-        Group currentGroup = GroupService.getGroupById(currentGroupId);
-        if (currentGroup == null) {
-            return;
-        }
-        
-        List<String> memberIds = currentGroup.getMemberIds();
-        if (memberIds == null || memberIds.isEmpty()) {
-            userListContainer.add(new Span("No members in this group"));
-            return;
-        }
-        
-        // Create a horizontal layout for the member list
-        HorizontalLayout membersLayout = new HorizontalLayout();
-        membersLayout.setWidthFull();
-        membersLayout.getStyle().set("flex-wrap", "wrap");
-        
-        // Add members to the list
-        for (String memberId : memberIds) {
-            User member = UserService.getUserById(memberId);
-            if (member != null) {
-                Div memberDiv = new Div();
-                
-                // Apply theme-specific styling
-                if (isDarkMode) {
-                    memberDiv.getStyle().set("background-color", "#2d3748");
-                    memberDiv.getStyle().set("color", "#e2e8f0");
-                } else {
-                    memberDiv.getStyle().set("background-color", "#e4e4e4");
-                    memberDiv.getStyle().set("color", "#333");
-                }
-                
-                memberDiv.getStyle().set("padding", "6px 12px");
-                memberDiv.getStyle().set("margin", "4px");
-                memberDiv.getStyle().set("border-radius", "16px");
-                memberDiv.getStyle().set("display", "inline-block");
-                
-                // Add a user icon
-                Icon userIcon = VaadinIcon.USER.create();
-                userIcon.getStyle().set("margin-right", "6px");
-                
-                Span nameSpan = new Span(member.getFullName());
-                memberDiv.add(userIcon, nameSpan);
-                
-                membersLayout.add(memberDiv);
-            }
-        }
-        
-        // Add a button to invite users to the group
-        Button addMemberButton = new Button("Add Member");
-        addMemberButton.addClickListener(e -> showAddMemberDialog());
-        
-        userListContainer.add(membersLayout, addMemberButton);
+private void updateUserList() {
+    if (currentGroupId == null) {
+        return;
     }
+        
+    // Clear previous list
+    userListContainer.removeAll();
+        
+    // Get group members
+    Group currentGroup = GroupService.getGroupById(currentGroupId);
+    if (currentGroup == null) {
+        userListContainer.add(new Span("No members in this group"));
+        return;
+    }
+
+    // Get the list of user emails/IDs
+    List<String> memberEmails = currentGroup.getUsers();
     
+    if (memberEmails == null || memberEmails.isEmpty()) {
+        userListContainer.add(new Span("No members in this group"));
+        return;
+    }
+        
+    // Create a horizontal layout for the member list
+    HorizontalLayout membersLayout = new HorizontalLayout();
+    membersLayout.setWidthFull();
+    membersLayout.getStyle().set("flex-wrap", "wrap");
+        
+    // Add members to the list
+    for (String memberEmail : memberEmails) {
+        User member = UserService.getUserByEmail(memberEmail);
+        if (member != null) {
+            Div memberDiv = new Div();
+                
+            // Apply theme-specific styling
+            if (isDarkMode) {
+                memberDiv.getStyle().set("background-color", "#2d3748");
+                memberDiv.getStyle().set("color", "#e2e8f0");
+            } else {
+                memberDiv.getStyle().set("background-color", "#e4e4e4");
+                memberDiv.getStyle().set("color", "#333");
+            }
+                
+            memberDiv.getStyle().set("padding", "6px 12px");
+            memberDiv.getStyle().set("margin", "4px");
+            memberDiv.getStyle().set("border-radius", "16px");
+            memberDiv.getStyle().set("display", "inline-block");
+                
+            // Add a user icon
+            Icon userIcon = VaadinIcon.USER.create();
+            userIcon.getStyle().set("margin-right", "6px");
+                
+            Span nameSpan = new Span(member.getFullName());
+            memberDiv.add(userIcon, nameSpan);
+                
+            membersLayout.add(memberDiv);
+        }
+    }
+        
+    // Add a button to invite users to the group
+    Button addMemberButton = new Button("Add Member");
+    addMemberButton.addClickListener(e -> showAddMemberDialog());
+        
+    userListContainer.add(membersLayout, addMemberButton);
+}
     private void showAddMemberDialog() {
         Dialog dialog = new Dialog();
         dialog.setWidth("400px");

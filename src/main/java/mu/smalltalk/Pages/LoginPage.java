@@ -173,46 +173,62 @@ public class LoginPage extends VerticalLayout {
             try {
                 // Validate form
                 if (!validateForm()) {
+                    Notification.show("Please fill in all fields correctly", 
+                        3000, Notification.Position.TOP_CENTER)
+                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
                     return;
                 }
                 
-                // Try to authenticate the user
-                User authenticatedUser = userService.authenticateUser(
-                    emailField.getValue(), 
-                    passwordField.getValue()
-                );
+                String email = emailField.getValue();
+                String password = passwordField.getValue();
                 
-                // IMPORTANT FIX: Store the username in session
-                VaadinSession.getCurrent().setAttribute("username", authenticatedUser.getFullName());
-                // Also store fullName if available
-                if (authenticatedUser.getFullName() != null && !authenticatedUser.getFullName().isEmpty()) {
-                    VaadinSession.getCurrent().setAttribute("username", authenticatedUser.getEmail());
+                // Log the login attempt (for debugging)
+                System.out.println("Login attempt for email: " + email);
+                
+                // Try to authenticate the user
+                User authenticatedUser = userService.authenticateUser(email, password);
+                
+                // Additional null check
+                if (authenticatedUser == null) {
+                    Notification.show("Authentication failed: Invalid credentials", 
+                        3000, Notification.Position.TOP_CENTER)
+                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                    
+                    // Optional: Add some logging
+                    System.err.println("Login failed for email: " + email);
+                    return;
                 }
                 
-                // Clear any previous sessionId to ensure the new username is used
-                VaadinSession.getCurrent().setAttribute("sessionId", null);
+                // Determine display name
+                String displayName = authenticatedUser.getFullName() != null && !authenticatedUser.getFullName().isEmpty()
+                    ? authenticatedUser.getFullName()
+                    : authenticatedUser.getEmail();
                 
-                // Store in localStorage for persistence across page refreshes
+                // Store session attributes
+                VaadinSession session = VaadinSession.getCurrent();
+                session.setAttribute("username", displayName);
+                session.setAttribute("userEmail", authenticatedUser.getEmail());
+                session.setAttribute("sessionId", null);
+                
+                // Store in localStorage for persistence
                 UI.getCurrent().getPage().executeJs(
-                    "localStorage.setItem('chat-session-id', $0);", 
-                    authenticatedUser.getFullName() != null ? 
-                        authenticatedUser.getFullName() : 
-                        authenticatedUser.getEmail());
+                    "localStorage.setItem('chat-session-id', $0);", displayName);
                 
-                // If successful, navigate to chat page
-                Notification.show("Login successful! Welcome, " + 
-                    (authenticatedUser.getFullName() != null ? 
-                        authenticatedUser.getFullName() : 
-                        authenticatedUser.getEmail()), 
+                // Successful login notification
+                Notification.show("Login successful! Welcome, " + displayName,
                     3000, Notification.Position.TOP_CENTER)
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                 
-                 getUI().ifPresent(ui -> ui.navigate(Chatpage.class));
-
+                // Navigate to chat page
+                getUI().ifPresent(ui -> ui.navigate(Chatpage.class));
                 
             } catch (Exception ex) {
-                // Show error message
-                Notification.show("Login failed: " + ex.getMessage(), 
+                // Detailed error logging
+                System.err.println("Login error: " + ex.getMessage());
+                ex.printStackTrace();
+                
+                // Show generic error message to user
+                Notification.show("Login failed. Please check your credentials and try again.",
                     3000, Notification.Position.TOP_CENTER)
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
             }

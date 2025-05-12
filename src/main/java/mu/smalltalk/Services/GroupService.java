@@ -27,9 +27,9 @@ public class GroupService {
         GroupService.mongoDbService = mongoDbService;
     }
     
-    /**
-     * Get all groups that a user belongs to
-     */
+    
+     // Get all groups that of user belong
+   
     public static List<Group> getUserGroups(String userId) {
         if (mongoDbService != null) {
             return mongoDbService.getUserGroups(userId);
@@ -48,7 +48,7 @@ public class GroupService {
             throw new IllegalArgumentException("Group with name '" + groupName + "' already exists");
         }
         
-        // hhhh new group
+        //  new group
         Group newGroup = new Group(groupName);
         newGroup.addUserId(creatorId);
         

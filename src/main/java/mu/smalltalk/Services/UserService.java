@@ -217,6 +217,11 @@ public class UserService {
         }
         return null;
    }
+   public static User getUserByEmail(String email) {
+    Optional<User> userOptional = userRepository.findById(email);
+    return userOptional.orElse(null);
+}
+
 
 public static List<User> getAllUsers() {
     List<User> users = new ArrayList<>();
