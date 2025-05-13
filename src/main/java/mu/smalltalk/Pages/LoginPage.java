@@ -16,7 +16,7 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.server.VaadinSession;
 
-import mu.smalltalk.Pages.Chatpage;
+import mu.smalltalk.Pages.ChatPage;
 import mu.smalltalk.Services.UserService;
 import mu.smalltalk.entitis.User;
 
@@ -220,7 +220,7 @@ public class LoginPage extends VerticalLayout {
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                 
                 // Navigate to chat page
-                getUI().ifPresent(ui -> ui.navigate(Chatpage.class));
+                getUI().ifPresent(ui -> ui.navigate(ChatPage.class));
                 
             } catch (Exception ex) {
                 // Detailed error logging
@@ -260,21 +260,29 @@ public class LoginPage extends VerticalLayout {
         return column;
     }
     
-    private boolean validateForm() {
-        boolean isValid = true;
-        
-        if (emailField.isEmpty() || !emailField.isInvalid()) {
-            emailField.setInvalid(true);
-            isValid = false;
-        }
-        
-        if (passwordField.isEmpty()) {
-            passwordField.setInvalid(true);
-            isValid = false;
-        }
-        
-        return isValid;
+// Validate form method
+private boolean validateForm() {
+    boolean isValid = true;
+    
+    // Clear previous validation states
+    emailField.setInvalid(false);
+    passwordField.setInvalid(false);
+    
+    // Basic validation for empty fields
+    if (emailField.getValue() == null || emailField.getValue().trim().isEmpty()) {
+        emailField.setErrorMessage("Email is required");
+        emailField.setInvalid(true);
+        isValid = false;
     }
+    
+    if (passwordField.getValue() == null || passwordField.getValue().trim().isEmpty()) {
+        passwordField.setErrorMessage("Password is required");
+        passwordField.setInvalid(true);
+        isValid = false;
+    }
+    
+    return isValid;
+}
     
     private VerticalLayout createImageColumn() {
         VerticalLayout column = new VerticalLayout();
@@ -317,4 +325,5 @@ public class LoginPage extends VerticalLayout {
         
         return column;
     }
+
 }

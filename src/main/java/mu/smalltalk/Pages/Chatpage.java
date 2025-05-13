@@ -53,7 +53,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Route("chat")
-public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
+public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
 
     private final MessageInput messageInput;
     private final Upload mediaUpload;
@@ -80,7 +80,7 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     // Track current theme
     private boolean isDarkMode = false;
 
-    public Chatpage() {
+    public ChatPage() {
         sessionId = initializeSessionId();
 
         aes = initializeEncryption();
@@ -162,19 +162,25 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                 currentGroupId = userGroups.get(0).getId();
             }
         }
+
+        // מצא את הקוד הקיים של groupSelector.addValueChangeListener ושנה אותו כך:
+
+groupSelector.addValueChangeListener(event -> {
+    System.out.println("Selected Group: " + event.getValue());
+    
+    if (event.getValue() != null) {
+        currentGroupId = event.getValue().getId();
+        System.out.println("Current Group ID set to: " + currentGroupId);
         
-        groupSelector.addValueChangeListener(event -> {
-            System.out.println("Selected Group: " + event.getValue());
-            
-            if (event.getValue() != null) {
-                currentGroupId = event.getValue().getId();
-                System.out.println("Current Group ID set to: " + currentGroupId);
-                
-                refreshChatHistory();
-                updateUserList(); 
-            }
-        });
+        User loggedInUser = UserService.getAuthenticatedUser();
+        String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
+        updateSessionIdDisplay(userName); 
         
+        refreshChatHistory();
+        updateUserList(); 
+    }
+});
+ 
         // Create action buttons layout
         HorizontalLayout actionButtons = new HorizontalLayout();
         actionButtons.add(refreshButton, groupSelector, newGroupButton);
@@ -214,50 +220,38 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
         if (!UserService.isUserAuthenticated()) {
-            // העברה לדף 
             event.forwardTo("login");  
             
-            // הודעה למשתמש
             Notification.show("יש להתחבר למערכת כדי לצפות בצ'אט", 
                            3000, Notification.Position.MIDDLE);
             return;
         }
         
-        // המשך האתחול של הצ'אט רק אם המשתמש מחובר
         initializeChatForAuthenticatedUser();
     }
     
     private void initializeChatForAuthenticatedUser() {
-        // קבלת המשתמש המחובר
         User currentUser = UserService.getAuthenticatedUser();
         if (currentUser != null) {
-            // אתחול הקבוצות שהמשתמש שייך אליהן
             List<Group> userGroups = loadUserGroups(currentUser);
             
-            // אתחול הממשק המשתמש עם הנתונים הרלוונטיים
             setupUserInterface(currentUser, userGroups);
             
-            // טעינת היסטוריית ההודעות רק כאשר המשתמש מאומת
             loadExistingMessages();
         }
     }
     
-    // הוספת מתודת עזר לטעינת קבוצות משתמש
     private List<Group> loadUserGroups(User currentUser) {
         // Load groups from the GroupService
         return GroupService.getUserGroups(currentUser.getEmail());
     }
     
-    // הוספת מתודת עזר להגדרת ממשק המשתמש
     private void setupUserInterface(User currentUser, List<Group> userGroups) {
-        // עדכון שם המשתמש בכותרת
         updateSessionIdDisplay(currentUser.getFullName());
         
-        // הגדרת הקבוצות בבורר הקבוצות
         if (groupSelector != null && !userGroups.isEmpty()) {
             groupSelector.setItems(userGroups);
             
-            // הגדרת קבוצה ברירת מחדל
             if (currentGroupId == null) {
                 Group defaultGroup = userGroups.get(0);
                 currentGroupId = defaultGroup.getId();
@@ -623,7 +617,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
             }
         });
     }
-    
     private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
         Button uploadButton = new Button("Upload");
         upload.setUploadButton(uploadButton);

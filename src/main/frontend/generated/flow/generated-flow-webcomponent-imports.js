@@ -3,14 +3,7 @@ import { injectGlobalWebcomponentCss } from 'Frontend/generated/jar-resources/th
 import { injectGlobalCss } from 'Frontend/generated/jar-resources/theme-util.js';
 
 import { css, unsafeCSS, registerStyles } from '@vaadin/vaadin-themable-mixin';
-import $cssFromFile_0 from 'Frontend/generated/jar-resources/styles/chat-assistant-styles.css?inline';
-import $cssFromFile_1 from 'Frontend/generated/jar-resources/styles/chat-message-styles.css?inline';
-import $cssFromFile_2 from 'Frontend/generated/jar-resources/styles/markdown-editor-styles.css?inline';
-import $cssFromFile_3 from 'Frontend/styles/shared-styles.css?inline';
-import 'wc-chatbot/dist/wc-chatbot.js';
-import '@vaadin/message-list/src/vaadin-message.js';
-import 'Frontend/generated/jar-resources/markdown-editor.tsx';
-import 'Frontend/generated/jar-resources/markdown-viewer.tsx';
+import $cssFromFile_0 from 'Frontend/styles/shared-styles.css?inline';
 import '@vaadin/field-highlighter/src/vaadin-field-highlighter.js';
 import '@vaadin/common-frontend/ConnectionIndicator.js';
 import '@vaadin/polymer-legacy-adapter/style-modules.js';
@@ -99,15 +92,6 @@ import '@vaadin/vaadin-lumo-styles/vaadin-iconset.js';
 
 injectGlobalCss($cssFromFile_0.toString(), 'CSSImport end', document);
 injectGlobalWebcomponentCss($cssFromFile_0.toString());
-
-injectGlobalCss($cssFromFile_1.toString(), 'CSSImport end', document);
-injectGlobalWebcomponentCss($cssFromFile_1.toString());
-
-injectGlobalCss($cssFromFile_2.toString(), 'CSSImport end', document);
-injectGlobalWebcomponentCss($cssFromFile_2.toString());
-
-injectGlobalCss($cssFromFile_3.toString(), 'CSSImport end', document);
-injectGlobalWebcomponentCss($cssFromFile_3.toString());
 const loadOnDemand = (key) => { return Promise.resolve(0); }
 window.Vaadin = window.Vaadin || {};
 window.Vaadin.Flow = window.Vaadin.Flow || {};
