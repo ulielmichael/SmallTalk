@@ -23,12 +23,12 @@ import mu.smalltalk.entitis.User;
 
 @CssImport("./styles/shared-styles.css")
 @Route("/signup")
-public class PageSignup extends VerticalLayout {
+public class SignupPage extends VerticalLayout {
 
     private final UserService userService;
 
     @Autowired
-    public PageSignup(UserService userService) {
+    public SignupPage(UserService userService) {
         this.userService = userService;
         
         // Set basic page properties

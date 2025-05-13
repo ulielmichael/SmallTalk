@@ -245,7 +245,7 @@ public class LoginPage extends VerticalLayout {
         Span signupText = new Span("Don't have an account? ");
         signupText.getStyle().set("color", "rgba(0, 0, 0, 0.6)");
         
-        RouterLink signupLink = new RouterLink("Create account", PageSignup.class);
+        RouterLink signupLink = new RouterLink("Create account", SignupPage.class);
         signupLink.getStyle()
             .set("color", "#2a5885")
             .set("margin-left", "4px")

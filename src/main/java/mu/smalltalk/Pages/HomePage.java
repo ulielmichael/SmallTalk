@@ -8,9 +8,9 @@ import com.vaadin.flow.router.Route;
 
 @CssImport("./styles/shared-styles.css")
 @Route("/")
-public class PageHome extends VerticalLayout {
+public class HomePage extends VerticalLayout {
     
-    public PageHome() {
+    public HomePage() {
         // Set basic page properties
         addClassName("home-page");
         setSpacing(false);

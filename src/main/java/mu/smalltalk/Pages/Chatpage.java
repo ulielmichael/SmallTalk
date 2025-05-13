@@ -100,9 +100,18 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
 
         messageInput.setWidthFull();
 
+        // Configure media upload with an icon
         MemoryBuffer buffer = new MemoryBuffer();
         mediaUpload = new Upload(buffer);
         configureMediaUpload(mediaUpload, buffer);
+        
+        // Create input and upload layout
+        HorizontalLayout inputLayout = new HorizontalLayout();
+        inputLayout.setWidthFull();
+        inputLayout.setSpacing(true);
+        inputLayout.add(messageInput, mediaUpload);
+        inputLayout.setFlexGrow(1, messageInput);
+        inputLayout.setAlignItems(Alignment.CENTER);
         
         // Use authenticated user's email or name if available
         User currentUser = UserService.getAuthenticatedUser();
@@ -187,7 +196,7 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         H3 userListHeader = new H3("Group Members");
         
         // Add components to main layout in the correct order
-        add(toolbar, userHeader, groupSelector, userListHeader, userListContainer, chatContainer, messageInput, mediaUpload, actionButtons);
+        add(toolbar, userHeader, groupSelector, userListHeader, userListContainer, chatContainer, inputLayout, actionButtons);
 
         setupMessageHandler();
         setupCrossBrowserCommunication();
@@ -308,7 +317,7 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
             
             System.out.println("Received message from " + displayName + " in group " + currentGroupId + ": " + message);
 
-            String formattedMessage = "[" + timestamp + "] " + displayName + ": " + message;
+            String formattedMessage = "[" + timestamp + "] " + displayName + ":<br>" + message;
             sendGroupMessage(formattedMessage, currentGroupId);
             
             encryptionService.encryptStringAsync(message)
@@ -320,8 +329,8 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                                     String encTimestamp = dateFormat.format(new Date());
                                     String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
 
-                                    String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName + ": <b>Encrypted:</b> "
-                                            + encodedMessage;
+                                    String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName + 
+                                        " <b>[Encrypted]</b>:<br>" + encodedMessage;
                                     
                                     sendGroupMessage(encryptedFormattedMessage, currentGroupId);
 
@@ -339,8 +348,8 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                             try {
                                 currentUI.access(() -> {
                                     String errorTimestamp = dateFormat.format(new Date());
-                                    String errorMessage = "[" + errorTimestamp + "] " + displayName
-                                            + ": <b>Error encrypting message:</b> " + ex.getMessage();
+                                    String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                                        " <b>[Error]</b>:<br>Error encrypting message: " + ex.getMessage();
                                     
                                     sendGroupMessage(errorMessage, currentGroupId);
                                     
@@ -512,8 +521,26 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
     }
 
     private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
-        Button uploadButton = new Button("Upload");
+        // Create an upload button with an icon
+        Button uploadButton = new Button(new Icon(VaadinIcon.UPLOAD));
+        uploadButton.getElement().setAttribute("aria-label", "Upload media");
+        uploadButton.getStyle().set("min-width", "auto");  // Make button compact
+        uploadButton.getStyle().set("margin-left", "5px");
+        
+        // Set the button as the upload button
         upload.setUploadButton(uploadButton);
+        
+        // Hide the upload field drag/drop area
+        upload.getElement().getStyle().set("display", "inline-block");
+        upload.getElement().getStyle().set("margin", "0");
+        upload.getElement().getStyle().set("padding", "0");
+        
+        // Only show the button, hide the drop area
+        upload.getElement().executeJs(
+            "this.querySelector('vaadin-upload-file-list').style.display = 'none';" +
+            "this.shadowRoot.querySelector('[part=\"drop-label\"]').style.display = 'none';"
+        );
+        
         upload.setAcceptedFileTypes("image/*", "audio/*");
         upload.setMaxFileSize(16 * 1024 * 1024); // 16 MB
 
@@ -538,15 +565,15 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                 String timestamp = dateFormat.format(new Date());
 
                 if (mimeType.startsWith("image/")) {
-                    String imageHtml = "<img src='data:" + mimeType + ";base64," + base64Data +
-                            "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
-                    sendGroupMessage("[" + timestamp + "] " + displayName + ": ✅ Image uploaded: " + fileName + "<br>"
-                            + imageHtml, currentGroupId);
+                    String imageHtml = "[" + timestamp + "] " + displayName + " <b>[Image]</b>:<br>" +
+                        "<img src='data:" + mimeType + ";base64," + base64Data +
+                        "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
+                    sendGroupMessage(imageHtml, currentGroupId);
                 } else if (mimeType.startsWith("audio/")) {
-                    String audioHtml = "<audio controls><source src='data:" + mimeType + ";base64," +
-                            base64Data + "' type='" + mimeType + "'></audio>";
-                    sendGroupMessage("[" + timestamp + "] " + displayName + ": ✅ Audio uploaded: " + fileName + "<br>"
-                            + audioHtml, currentGroupId);
+                    String audioHtml = "[" + timestamp + "] " + displayName + " <b>[Audio]</b>:<br>" +
+                        "<audio controls><source src='data:" + mimeType + ";base64," +
+                        base64Data + "' type='" + mimeType + "'></audio>";
+                    sendGroupMessage(audioHtml, currentGroupId);
                 }
 
                 final byte[] finalFileData = fileData;
@@ -557,8 +584,8 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                             try {
                                 ui.access(() -> {
                                     String encTimestamp = dateFormat.format(new Date());
-                                    String successMessage = "[" + encTimestamp + "] " + displayName + ": ✅ File " + fileName
-                                            + " encrypted successfully";
+                                    String successMessage = "[" + encTimestamp + "] " + displayName + 
+                                        " <b>[Encrypted File]</b>:<br>File " + fileName + " encrypted successfully";
                                     
                                     sendGroupMessage(successMessage, currentGroupId);
                                     
@@ -575,8 +602,8 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                             try {
                                 ui.access(() -> {
                                     String errorTimestamp = dateFormat.format(new Date());
-                                    String errorMessage = "[" + errorTimestamp + "] " + displayName
-                                            + ": ❌ Error encrypting file: " + ex.getMessage();
+                                    String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                                        " <b>[Error]</b>:<br>Error encrypting file: " + ex.getMessage();
                                     
                                     sendGroupMessage(errorMessage, currentGroupId);
                                     
@@ -590,8 +617,8 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                     });
             } catch (IOException e) {
                 String errorTimestamp = dateFormat.format(new Date());
-                String errorMessage = "[" + errorTimestamp + "] " + displayName
-                        + ": ❌ Error processing file: " + e.getMessage();
+                String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                    " <b>[Error]</b>:<br>Error processing file: " + e.getMessage();
                 
                 sendGroupMessage(errorMessage, currentGroupId);
             }
@@ -658,7 +685,7 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                                     String decTimestamp = dateFormat.format(new Date());
                                     String decryptedText = new String(decryptedBytes, StandardCharsets.UTF_8);
                                     String decryptedMessage = "[" + decTimestamp + "] " + displayName + 
-                                            ": <b>Decrypted:</b> " + decryptedText;
+                                            " <b>[Decrypted]</b>:<br>" + decryptedText;
                                     
                                     sendGroupMessage(decryptedMessage, groupId);
                                     
@@ -676,7 +703,7 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                                 ui.access(() -> {
                                     String errorTimestamp = dateFormat.format(new Date());
                                     String errorMessage = "[" + errorTimestamp + "] " + displayName + 
-                                            ": <b>Error decrypting message:</b> " + ex.getMessage();
+                                            " <b>[Error]</b>:<br>Error decrypting message: " + ex.getMessage();
                                     
                                     sendGroupMessage(errorMessage, groupId);
                                     
@@ -694,7 +721,7 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
             String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
             
             String errorMessage = "[" + errorTimestamp + "] " + displayName + 
-                    ": <b>Error decoding Base64:</b> " + e.getMessage();
+                    " <b>[Error]</b>:<br>Error decoding Base64: " + e.getMessage();
             
             sendGroupMessage(errorMessage, groupId);
         }
@@ -797,71 +824,72 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         userSelector.setItems(allUsers);
         userSelector.setItemLabelGenerator(User::getFullName);
         userSelector.setWidthFull();
+        
         Button cancelButton = new Button("Cancel", e -> dialog.close());
         Button createButton = new Button("Create", e -> {
             String groupName = groupNameField.getValue().trim();
-        if (groupName.isEmpty()) {
-            Notification.show("Please enter a group name", 2000, Notification.Position.MIDDLE);
-            return;
-        }
-        
-        User currentUser = UserService.getAuthenticatedUser();
-        if (currentUser == null) {
-            Notification.show("You must be logged in to create a group", 2000, Notification.Position.MIDDLE);
+            if (groupName.isEmpty()) {
+                Notification.show("Please enter a group name", 2000, Notification.Position.MIDDLE);
+                return;
+            }
+            
+            User currentUser = UserService.getAuthenticatedUser();
+            if (currentUser == null) {
+                Notification.show("You must be logged in to create a group", 2000, Notification.Position.MIDDLE);
+                dialog.close();
+                return;
+            }
+            
+            // Create the new group
+            Group newGroup = GroupService.createGroup(groupName, currentUser.getEmail());
+            
+            // Add selected users
+            Set<User> selectedUsers = userSelector.getValue();
+            for (User user : selectedUsers) {
+                GroupService.addUserToGroup(user.getEmail(), newGroup.getId());
+            }
+            
+            // Update the group selector
+            updateGroupSelector();
+            
+            // Select the new group
+            if (newGroup != null) {
+                groupSelector.setValue(newGroup);
+                currentGroupId = newGroup.getId();
+                loadExistingMessages();
+                updateUserList();
+            }
+            
+            Notification.show("Group created: " + groupName, 2000, Notification.Position.BOTTOM_CENTER);
             dialog.close();
-            return;
-        }
+        });
         
-        // Create the new group
-        Group newGroup = GroupService.createGroup(groupName, currentUser.getEmail());
+        HorizontalLayout buttonLayout = new HorizontalLayout(cancelButton, createButton);
+        buttonLayout.setJustifyContentMode(JustifyContentMode.END);
+        buttonLayout.setWidthFull();
         
-        // Add selected users
-        Set<User> selectedUsers = userSelector.getValue();
-        for (User user : selectedUsers) {
-            GroupService.addUserToGroup(user.getEmail(), newGroup.getId());
-        }
-        
-        // Update the group selector
-        updateGroupSelector();
-        
-        // Select the new group
-        if (newGroup != null) {
-            groupSelector.setValue(newGroup);
-            currentGroupId = newGroup.getId();
-            loadExistingMessages();
-            updateUserList();
-        }
-        
-        Notification.show("Group created: " + groupName, 2000, Notification.Position.BOTTOM_CENTER);
-        dialog.close();
-    });
-    
-    HorizontalLayout buttonLayout = new HorizontalLayout(cancelButton, createButton);
-    buttonLayout.setJustifyContentMode(JustifyContentMode.END);
-    buttonLayout.setWidthFull();
-    
-    dialogLayout.add(title, groupNameField, userSelector, buttonLayout);
-    dialog.add(dialogLayout);
-    dialog.open();
-}
-
-private void updateGroupSelector() {
-    User currentUser = UserService.getAuthenticatedUser();
-    if (currentUser != null) {
-        List<Group> userGroups = GroupService.getUserGroups(currentUser.getEmail());
-        groupSelector.setItems(userGroups);
-    }
-}
-
-private static class ChatStorage {
-    private static final Map<String, List<String>> groupMessages = new HashMap<>();
-    
-    public static synchronized void addGroupMessage(String groupId, String message) {
-        groupMessages.computeIfAbsent(groupId, k -> new ArrayList<>()).add(message);
+        dialogLayout.add(title, groupNameField, userSelector, buttonLayout);
+        dialog.add(dialogLayout);
+        dialog.open();
     }
     
-    public static synchronized List<String> getGroupMessages(String groupId) {
-        return new ArrayList<>(groupMessages.getOrDefault(groupId, new ArrayList<>()));
+    private void updateGroupSelector() {
+        User currentUser = UserService.getAuthenticatedUser();
+        if (currentUser != null) {
+            List<Group> userGroups = GroupService.getUserGroups(currentUser.getEmail());
+            groupSelector.setItems(userGroups);
+        }
     }
-}
+    
+    private static class ChatStorage {
+        private static final Map<String, List<String>> groupMessages = new HashMap<>();
+        
+        public static synchronized void addGroupMessage(String groupId, String message) {
+            groupMessages.computeIfAbsent(groupId, k -> new ArrayList<>()).add(message);
+        }
+        
+        public static synchronized List<String> getGroupMessages(String groupId) {
+            return new ArrayList<>(groupMessages.getOrDefault(groupId, new ArrayList<>()));
+        }
+    }
 }
