@@ -70,15 +70,6 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
     private String currentGroupId = null;
 
     private int lastSeenMessageCount = 0;
-    
-    // Add a refresh button for the chat
-    private Button refreshButton;
-    
-    // Add theme toggle button
-    private Button themeToggleButton;
-    
-    // Track current theme
-    private boolean isDarkMode = false;
 
     public ChatPage() {
         sessionId = initializeSessionId();
@@ -93,9 +84,6 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         chatContainer.setWidthFull();
         chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
         
-        // Default to light mode
-        applyLightMode();
-        
         chatContainer.getStyle().set("overflow-y", "auto");
         chatContainer.getStyle().set("border", "1px solid #ddd");
         chatContainer.addClassName("chat-container"); // Add this class for JavaScript to identify
@@ -106,6 +94,9 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         userListContainer.getStyle().set("margin-bottom", "10px");
         userListContainer.getStyle().set("border", "1px solid #ddd");
         userListContainer.getStyle().set("border-radius", "4px");
+        
+        // Initially hide user list container
+        userListContainer.setVisible(false);
 
         messageInput.setWidthFull();
 
@@ -113,25 +104,12 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         mediaUpload = new Upload(buffer);
         configureMediaUpload(mediaUpload, buffer);
         
-        // Create refresh button
-        refreshButton = new Button("Refresh Chat");
-        refreshButton.addClickListener(e -> refreshChatHistory());
-        
-        // Create theme toggle button
-        themeToggleButton = new Button("DARK MODE");
-        themeToggleButton.getStyle().set("background-color", "#333");
-        themeToggleButton.getStyle().set("color", "white");
-        themeToggleButton.addClickListener(e -> toggleTheme());
-        
-        // Create header with title and theme toggle
-        HorizontalLayout header = new HorizontalLayout();
-        header.setWidthFull();
-        header.setJustifyContentMode(JustifyContentMode.BETWEEN);
-        
         // Use authenticated user's email or name if available
         User currentUser = UserService.getAuthenticatedUser();
         String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-        header.add(new H2(displayName), themeToggleButton);
+        
+        // Create header with just the user's name
+        H2 userHeader = new H2(displayName);
         
         // Create group selector
         groupSelector = new ComboBox<>("Select Group");
@@ -154,36 +132,35 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
             }
             
             groupSelector.setItems(userGroups);
-            
-            // Set the first group as default if available
-            if (!userGroups.isEmpty()) {
-                System.out.println("Setting default group: " + userGroups.get(0).getName());
-                groupSelector.setValue(userGroups.get(0));
-                currentGroupId = userGroups.get(0).getId();
-            }
         }
 
-        // מצא את הקוד הקיים של groupSelector.addValueChangeListener ושנה אותו כך:
-
-groupSelector.addValueChangeListener(event -> {
-    System.out.println("Selected Group: " + event.getValue());
-    
-    if (event.getValue() != null) {
-        currentGroupId = event.getValue().getId();
-        System.out.println("Current Group ID set to: " + currentGroupId);
-        
-        User loggedInUser = UserService.getAuthenticatedUser();
-        String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
-        updateSessionIdDisplay(userName); 
-        
-        refreshChatHistory();
-        updateUserList(); 
-    }
-});
+        groupSelector.addValueChangeListener(event -> {
+            System.out.println("Selected Group: " + event.getValue());
+            
+            if (event.getValue() != null) {
+                currentGroupId = event.getValue().getId();
+                System.out.println("Current Group ID set to: " + currentGroupId);
+                
+                // Show user list when a group is selected
+                userListContainer.setVisible(true);
+                
+                User loggedInUser = UserService.getAuthenticatedUser();
+                String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
+                
+                // Just show the user name, not the group name
+                updateSessionIdDisplay(userName); 
+                
+                refreshChatHistory();
+                updateUserList(); 
+            } else {
+                // Hide user list when no group is selected
+                userListContainer.setVisible(false);
+            }
+        });
  
-        // Create action buttons layout
+        // Create action buttons layout with only the new group button
         HorizontalLayout actionButtons = new HorizontalLayout();
-        actionButtons.add(refreshButton, groupSelector, newGroupButton);
+        actionButtons.add(newGroupButton);
         actionButtons.setWidthFull();
         actionButtons.setSpacing(true);
         
@@ -209,22 +186,17 @@ groupSelector.addValueChangeListener(event -> {
         // Add a section for user list
         H3 userListHeader = new H3("Group Members");
         
-        // Add components to main layout
-        add(toolbar, header, userListHeader, userListContainer, chatContainer, messageInput, mediaUpload, actionButtons);
+        // Add components to main layout in the correct order
+        add(toolbar, userHeader, groupSelector, userListHeader, userListContainer, chatContainer, messageInput, mediaUpload, actionButtons);
 
         setupMessageHandler();
         setupCrossBrowserCommunication();
-        loadThemePreference();
     }
 
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
         if (!UserService.isUserAuthenticated()) {
             event.forwardTo("login");  
-            
-            Notification.show("יש להתחבר למערכת כדי לצפות בצ'אט", 
-                           3000, Notification.Position.MIDDLE);
-            return;
         }
         
         initializeChatForAuthenticatedUser();
@@ -236,8 +208,6 @@ groupSelector.addValueChangeListener(event -> {
             List<Group> userGroups = loadUserGroups(currentUser);
             
             setupUserInterface(currentUser, userGroups);
-            
-            loadExistingMessages();
         }
     }
     
@@ -247,81 +217,19 @@ groupSelector.addValueChangeListener(event -> {
     }
     
     private void setupUserInterface(User currentUser, List<Group> userGroups) {
+        // Just update with the user's name, no group name
         updateSessionIdDisplay(currentUser.getFullName());
         
         if (groupSelector != null && !userGroups.isEmpty()) {
             groupSelector.setItems(userGroups);
             
-            if (currentGroupId == null) {
-                Group defaultGroup = userGroups.get(0);
-                currentGroupId = defaultGroup.getId();
-                groupSelector.setValue(defaultGroup);
-            }
+            // Don't automatically select a group
+            currentGroupId = null;
+            groupSelector.setValue(null);
+            
+            // Initially hide user list since no group is selected
+            userListContainer.setVisible(false);
         }
-    }
-
-    private void loadThemePreference() {
-        UI.getCurrent().getPage().executeJs(
-                "return localStorage.getItem('chat-theme-preference');")
-                .then(String.class, result -> {
-                    if ("dark".equals(result)) {
-                        isDarkMode = true;
-                        applyDarkMode();
-                        themeToggleButton.setText("LIGHT MODE");
-                        themeToggleButton.getStyle().set("background-color", "#f0f0f0");
-                        themeToggleButton.getStyle().set("color", "#333");
-                    }
-                });
-    }
-    
-    private void toggleTheme() {
-        isDarkMode = !isDarkMode;
-        
-        if (isDarkMode) {
-            applyDarkMode();
-            themeToggleButton.setText("LIGHT MODE");
-            themeToggleButton.getStyle().set("background-color", "#f0f0f0");
-            themeToggleButton.getStyle().set("color", "#333");
-        } else {
-            applyLightMode();
-            themeToggleButton.setText("DARK MODE");
-            themeToggleButton.getStyle().set("background-color", "#333");
-            themeToggleButton.getStyle().set("color", "white");
-        }
-        
-        UI.getCurrent().getPage().executeJs(
-                "localStorage.setItem('chat-theme-preference', $0);", isDarkMode ? "dark" : "light");
-                
-        refreshChatHistory();
-        updateUserList(); // Update user list when theme changes
-    }
-    
-    private void applyDarkMode() {
-        getStyle().set("background-color", "#2c2c2c");
-        getStyle().set("color", "#f0f0f0");
-        
-        chatContainer.getStyle().set("background-color", "#1e1e1e");
-        chatContainer.getStyle().set("border", "1px solid #444");
-        
-        userListContainer.getStyle().set("background-color", "#1e1e1e");
-        userListContainer.getStyle().set("border", "1px solid #444");
-        
-        messageInput.getStyle().set("background-color", "#333");
-        messageInput.getStyle().set("color", "white");
-    }
-    
-    private void applyLightMode() {
-        getStyle().set("background-color", "#f8f8f8");
-        getStyle().set("color", "#333");
-        
-        chatContainer.getStyle().set("background-color", "white");
-        chatContainer.getStyle().set("border", "1px solid #ddd");
-        
-        userListContainer.getStyle().set("background-color", "white");
-        userListContainer.getStyle().set("border", "1px solid #ddd");
-        
-        messageInput.getStyle().set("background-color", "white");
-        messageInput.getStyle().set("color", "#333");
     }
 
     @Override
@@ -330,18 +238,8 @@ groupSelector.addValueChangeListener(event -> {
     
         registerWithBroadcaster();
     
-        // Load existing messages after registration is complete
         UI.getCurrent().access(() -> {
-            // Check if we need to select a group
-            if (currentGroupId == null && groupSelector != null && groupSelector.getValue() == null) {
-                User currentUser = UserService.getAuthenticatedUser();
-                if (currentUser != null) {
-                    updateGroupSelector();
-                }
-            }
-            
-            loadExistingMessages();
-            updateUserList();
+        
         });
         
         checkForNewMessages();
@@ -383,10 +281,11 @@ groupSelector.addValueChangeListener(event -> {
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
             ui.access(() -> {
-                loadExistingMessages();
-                updateUserList();
-                ui.push();
-                Notification.show("Chat refreshed", 2000, Notification.Position.BOTTOM_CENTER);
+                if (currentGroupId != null) {
+                    loadExistingMessages();
+                    updateUserList();
+                    ui.push();
+                }
             });
         }
     }
@@ -480,7 +379,9 @@ groupSelector.addValueChangeListener(event -> {
         if (ui != null && ui.isAttached()) {
             ui.access(() -> {
                 checkForNewMessages();
-                updateUserList();
+                if (currentGroupId != null) {
+                    updateUserList();
+                }
                 ui.push();
             });
         }
@@ -602,21 +503,14 @@ groupSelector.addValueChangeListener(event -> {
     }
 
     private void updateSessionIdDisplay(String id) {
+        // Update just the user's name without group name
         getChildren().forEach(component -> {
-            if (component instanceof HorizontalLayout) {
-                HorizontalLayout layout = (HorizontalLayout) component;
-                layout.getChildren().forEach(child -> {
-                    if (child instanceof H2) {
-                        if (groupSelector != null && groupSelector.getValue() != null) {
-                            ((H2) child).setText(id + " - " + groupSelector.getValue().getName());
-                        } else {
-                            ((H2) child).setText(id);
-                        }
-                    }
-                });
+            if (component instanceof H2) {
+                ((H2) component).setText(id);
             }
         });
     }
+
     private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
         Button uploadButton = new Button("Upload");
         upload.setUploadButton(uploadButton);
@@ -724,15 +618,8 @@ groupSelector.addValueChangeListener(event -> {
         Div messageDiv = new Div();
         messageDiv.getElement().setProperty("innerHTML", message);
         
-        // Apply theme-specific styling
-        if (isDarkMode) {
-            messageDiv.getStyle().set("background-color", "#2d3748");
-            messageDiv.getStyle().set("color", "#e2e8f0");
-        } else {
-            messageDiv.getStyle().set("background-color", "#f0f0f0");
-            messageDiv.getStyle().set("color", "#333");
-        }
-        
+        messageDiv.getStyle().set("background-color", "#f0f0f0");
+        messageDiv.getStyle().set("color", "#333");
         messageDiv.getStyle().set("padding", "8px 12px");
         messageDiv.getStyle().set("margin-bottom", "8px");
         messageDiv.getStyle().set("border-radius", "8px");
@@ -814,140 +701,78 @@ groupSelector.addValueChangeListener(event -> {
     }
     
     private Aes256 initializeEncryption() {
-    try {
-        byte[] key = new byte[32];
-      
-        for (int i = 0; i < key.length; i++) {
-            key[i] = (byte) i;
+        try {
+            byte[] key = new byte[32];
+        
+            for (int i = 0; i < key.length; i++) {
+                key[i] = (byte) i;
+            }
+            
+            return new Aes256(key);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Notification.show("Error initializing encryption: " + e.getMessage(),
+                    3000, Notification.Position.MIDDLE);
+            return null;
         }
-        
-        return new Aes256(key);
-    } catch (Exception e) {
-        e.printStackTrace();
-        Notification.show("Error initializing encryption: " + e.getMessage(),
-                3000, Notification.Position.MIDDLE);
-        return null;
     }
-}
-private void updateUserList() {
-    if (currentGroupId == null) {
-        return;
-    }
-        
-    // Clear previous list
-    userListContainer.removeAll();
-        
-    // Get group members
-    Group currentGroup = GroupService.getGroupById(currentGroupId);
-    if (currentGroup == null) {
-        userListContainer.add(new Span("No members in this group"));
-        return;
-    }
-
-    // Get the list of user emails/IDs
-    List<String> memberEmails = currentGroup.getUsers();
     
-    if (memberEmails == null || memberEmails.isEmpty()) {
-        userListContainer.add(new Span("No members in this group"));
-        return;
-    }
+    private void updateUserList() {
+        if (currentGroupId == null) {
+            userListContainer.setVisible(false);
+            return;
+        }
+            
+        userListContainer.setVisible(true);
+            
+        // Clear previous list
+        userListContainer.removeAll();
+            
+        // Get group members
+        Group currentGroup = GroupService.getGroupById(currentGroupId);
+        if (currentGroup == null) {
+            userListContainer.add(new Span("No members in this group"));
+            return;
+        }
+    
+        // Get the list of user emails/IDs
+        List<String> memberEmails = currentGroup.getUsers();
         
-    // Create a horizontal layout for the member list
-    HorizontalLayout membersLayout = new HorizontalLayout();
-    membersLayout.setWidthFull();
-    membersLayout.getStyle().set("flex-wrap", "wrap");
-        
-    // Add members to the list
-    for (String memberEmail : memberEmails) {
-        User member = UserService.getUserByEmail(memberEmail);
-        if (member != null) {
-            Div memberDiv = new Div();
-                
-            // Apply theme-specific styling
-            if (isDarkMode) {
-                memberDiv.getStyle().set("background-color", "#2d3748");
-                memberDiv.getStyle().set("color", "#e2e8f0");
-            } else {
+        if (memberEmails == null || memberEmails.isEmpty()) {
+            userListContainer.add(new Span("No members in this group"));
+            return;
+        }
+            
+        // Create a horizontal layout for the member list
+        HorizontalLayout membersLayout = new HorizontalLayout();
+        membersLayout.setWidthFull();
+        membersLayout.getStyle().set("flex-wrap", "wrap");
+            
+        // Add members to the list
+        for (String memberEmail : memberEmails) {
+            User member = UserService.getUserByEmail(memberEmail);
+            if (member != null) {
+                Div memberDiv = new Div();
+                    
                 memberDiv.getStyle().set("background-color", "#e4e4e4");
                 memberDiv.getStyle().set("color", "#333");
+                memberDiv.getStyle().set("padding", "6px 12px");
+                memberDiv.getStyle().set("margin", "4px");
+                memberDiv.getStyle().set("border-radius", "16px");
+                memberDiv.getStyle().set("display", "inline-block");
+                    
+                // Add a user icon
+                Icon userIcon = VaadinIcon.USER.create();
+                userIcon.getStyle().set("margin-right", "6px");
+                    
+                Span nameSpan = new Span(member.getFullName());
+                memberDiv.add(userIcon, nameSpan);
+                    
+                membersLayout.add(memberDiv);
             }
-                
-            memberDiv.getStyle().set("padding", "6px 12px");
-            memberDiv.getStyle().set("margin", "4px");
-            memberDiv.getStyle().set("border-radius", "16px");
-            memberDiv.getStyle().set("display", "inline-block");
-                
-            // Add a user icon
-            Icon userIcon = VaadinIcon.USER.create();
-            userIcon.getStyle().set("margin-right", "6px");
-                
-            Span nameSpan = new Span(member.getFullName());
-            memberDiv.add(userIcon, nameSpan);
-                
-            membersLayout.add(memberDiv);
         }
-    }
-        
-    // Add a button to invite users to the group
-    Button addMemberButton = new Button("Add Member");
-    addMemberButton.addClickListener(e -> showAddMemberDialog());
-        
-    userListContainer.add(membersLayout, addMemberButton);
-}
-    private void showAddMemberDialog() {
-        Dialog dialog = new Dialog();
-        dialog.setWidth("400px");
-        
-        VerticalLayout dialogLayout = new VerticalLayout();
-        dialogLayout.setPadding(true);
-        dialogLayout.setSpacing(true);
-        
-        H3 title = new H3("Add Members to Group");
-        
-        // Get all users who are not already in the group
-        Group currentGroup = GroupService.getGroupById(currentGroupId);
-        List<String> currentMemberIds = currentGroup != null ? currentGroup.getMemberIds() : new ArrayList<>();
-        
-        List<User> allUsers = UserService.getAllUsers();
-        List<User> nonMembers = allUsers.stream()
-                .filter(user -> !currentMemberIds.contains(user.getEmail()))
-                .collect(Collectors.toList());
-        
-        // Create a multi-select combo box
-        MultiSelectComboBox<User> userSelector = new MultiSelectComboBox<>("Select Users");
-        userSelector.setItems(nonMembers);
-        userSelector.setItemLabelGenerator(User::getFullName);
-        userSelector.setWidthFull();
-        
-        // Create buttons
-        Button cancelButton = new Button("Cancel", e -> dialog.close());
-        Button addButton = new Button("Add", e -> {
-            Set<User> selectedUsers = userSelector.getValue();
             
-            if (selectedUsers.isEmpty()) {
-                Notification.show("No users selected", 2000, Notification.Position.MIDDLE);
-                return;
-            }
-            
-            // Add the selected users to the group
-            for (User user : selectedUsers) {
-                GroupService.addUserToGroup(user.getEmail(), currentGroupId);
-            }
-            
-            // Update the UI
-            updateUserList();
-            
-            Notification.show("Users added to group", 2000, Notification.Position.BOTTOM_CENTER);
-            dialog.close();
-        });
-        
-        HorizontalLayout buttonLayout = new HorizontalLayout(cancelButton, addButton);
-        buttonLayout.setJustifyContentMode(JustifyContentMode.END);
-        buttonLayout.setWidthFull();
-        
-        dialogLayout.add(title, userSelector, buttonLayout);
-        dialog.add(dialogLayout);
-        dialog.open();
+        userListContainer.add(membersLayout);
     }
     
     private void createNewGroup() {
@@ -972,74 +797,71 @@ private void updateUserList() {
         userSelector.setItems(allUsers);
         userSelector.setItemLabelGenerator(User::getFullName);
         userSelector.setWidthFull();
-        
-        // Create buttons
         Button cancelButton = new Button("Cancel", e -> dialog.close());
         Button createButton = new Button("Create", e -> {
             String groupName = groupNameField.getValue().trim();
-            
-            if (groupName.isEmpty()) {
-                Notification.show("Please enter a group name", 2000, Notification.Position.MIDDLE);
-                return;
-            }
-            
-            User currentUser = UserService.getAuthenticatedUser();
-            if (currentUser == null) {
-                Notification.show("You must be logged in to create a group", 2000, Notification.Position.MIDDLE);
-                dialog.close();
-                return;
-            }
-            
-            // Create the new group
-            Group newGroup = GroupService.createGroup(groupName, currentUser.getEmail());
-            
-            // Add selected users
-            Set<User> selectedUsers = userSelector.getValue();
-            for (User user : selectedUsers) {
-                GroupService.addUserToGroup(user.getEmail(), newGroup.getName());
-            }
-            
-            // Update the group selector
-            updateGroupSelector();
-            
-            // Select the new group
-            if (newGroup != null) {
-                groupSelector.setValue(newGroup);
-                currentGroupId = newGroup.getName();
-                loadExistingMessages();
-                updateUserList();
-            }
-            
-            Notification.show("Group created: " + groupName, 2000, Notification.Position.BOTTOM_CENTER);
-            dialog.close();
-        });
+        if (groupName.isEmpty()) {
+            Notification.show("Please enter a group name", 2000, Notification.Position.MIDDLE);
+            return;
+        }
         
-        HorizontalLayout buttonLayout = new HorizontalLayout(cancelButton, createButton);
-        buttonLayout.setJustifyContentMode(JustifyContentMode.END);
-        buttonLayout.setWidthFull();
-        
-        dialogLayout.add(title, groupNameField, userSelector, buttonLayout);
-        dialog.add(dialogLayout);
-        dialog.open();
-    }
-    
-    private void updateGroupSelector() {
         User currentUser = UserService.getAuthenticatedUser();
-        if (currentUser != null) {
-            List<Group> userGroups = GroupService.getUserGroups(currentUser.getEmail());
-            groupSelector.setItems(userGroups);
+        if (currentUser == null) {
+            Notification.show("You must be logged in to create a group", 2000, Notification.Position.MIDDLE);
+            dialog.close();
+            return;
         }
+        
+        // Create the new group
+        Group newGroup = GroupService.createGroup(groupName, currentUser.getEmail());
+        
+        // Add selected users
+        Set<User> selectedUsers = userSelector.getValue();
+        for (User user : selectedUsers) {
+            GroupService.addUserToGroup(user.getEmail(), newGroup.getId());
+        }
+        
+        // Update the group selector
+        updateGroupSelector();
+        
+        // Select the new group
+        if (newGroup != null) {
+            groupSelector.setValue(newGroup);
+            currentGroupId = newGroup.getId();
+            loadExistingMessages();
+            updateUserList();
+        }
+        
+        Notification.show("Group created: " + groupName, 2000, Notification.Position.BOTTOM_CENTER);
+        dialog.close();
+    });
+    
+    HorizontalLayout buttonLayout = new HorizontalLayout(cancelButton, createButton);
+    buttonLayout.setJustifyContentMode(JustifyContentMode.END);
+    buttonLayout.setWidthFull();
+    
+    dialogLayout.add(title, groupNameField, userSelector, buttonLayout);
+    dialog.add(dialogLayout);
+    dialog.open();
+}
+
+private void updateGroupSelector() {
+    User currentUser = UserService.getAuthenticatedUser();
+    if (currentUser != null) {
+        List<Group> userGroups = GroupService.getUserGroups(currentUser.getEmail());
+        groupSelector.setItems(userGroups);
+    }
+}
+
+private static class ChatStorage {
+    private static final Map<String, List<String>> groupMessages = new HashMap<>();
+    
+    public static synchronized void addGroupMessage(String groupId, String message) {
+        groupMessages.computeIfAbsent(groupId, k -> new ArrayList<>()).add(message);
     }
     
-    private static class ChatStorage {
-        private static final Map<String, List<String>> groupMessages = new HashMap<>();
-        
-        public static synchronized void addGroupMessage(String groupId, String message) {
-            groupMessages.computeIfAbsent(groupId, k -> new ArrayList<>()).add(message);
-        }
-        
-        public static synchronized List<String> getGroupMessages(String groupId) {
-            return new ArrayList<>(groupMessages.getOrDefault(groupId, new ArrayList<>()));
-        }
+    public static synchronized List<String> getGroupMessages(String groupId) {
+        return new ArrayList<>(groupMessages.getOrDefault(groupId, new ArrayList<>()));
     }
-    }
+}
+}
