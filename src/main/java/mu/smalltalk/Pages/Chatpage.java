@@ -543,10 +543,10 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         });
     }
 
-   private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
+  private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
     // Create an upload button with an icon and text for better clarity
-    Button uploadButton = new Button("upload", new Icon(VaadinIcon.UPLOAD));
-    uploadButton.getElement().setAttribute("aria-label", "upload media");
+    Button uploadButton = new Button("Upload", new Icon(VaadinIcon.UPLOAD));
+    uploadButton.getElement().setAttribute("aria-label", "Upload media");
     uploadButton.getStyle().set("cursor", "pointer");
     uploadButton.getStyle().set("background-color", "#e0e0e0");
     uploadButton.getStyle().set("border", "1px solid #ccc");
@@ -585,12 +585,12 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
     upload.setMaxFileSize(16 * 1024 * 1024); // 16 MB
     
     // Add tooltip to explain what the button does
-    Tooltip.forComponent(uploadButton).withText("upload a iamge or audio ").withPosition(Tooltip.TooltipPosition.TOP);
+    Tooltip.forComponent(uploadButton).withText("Upload an image or audio").withPosition(Tooltip.TooltipPosition.TOP);
     
     // Add handlers for upload events
     upload.addSucceededListener(event -> {
         if (currentGroupId == null) {
-            Notification.show("selcte a grouop ", 2000, Notification.Position.MIDDLE);
+            Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
             return;
         }
         
@@ -609,12 +609,12 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
             String timestamp = dateFormat.format(new Date());
 
             if (mimeType.startsWith("image/")) {
-                String imageHtml = "[" + timestamp + "] " + displayName + " <b>[image]</b>:<br>" +
+                String imageHtml = "[" + timestamp + "] " + displayName + " <b>[Image]</b>:<br>" +
                     "<img src='data:" + mimeType + ";base64," + base64Data +
                     "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
                 sendGroupMessage(imageHtml, currentGroupId);
             } else if (mimeType.startsWith("audio/")) {
-                String audioHtml = "[" + timestamp + "] " + displayName + " <b>[audio]</b>:<br>" +
+                String audioHtml = "[" + timestamp + "] " + displayName + " <b>[Audio]</b>:<br>" +
                     "<audio controls><source src='data:" + mimeType + ";base64," +
                     base64Data + "' type='" + mimeType + "'></audio>";
                 sendGroupMessage(audioHtml, currentGroupId);
@@ -629,7 +629,7 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                             ui.access(() -> {
                                 String encTimestamp = dateFormat.format(new Date());
                                 String successMessage = "[" + encTimestamp + "] " + displayName + 
-                                    " <b>[the file encoded]</b>:<br>the file  " + fileName + "encoded successfully";
+                                    " <b>[File Encrypted]</b>:<br>The file " + fileName + " encrypted successfully";
                                 
                                 sendGroupMessage(successMessage, currentGroupId);
                                 
@@ -647,7 +647,7 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                             ui.access(() -> {
                                 String errorTimestamp = dateFormat.format(new Date());
                                 String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                    " <b>[error]</b>:<br>error encoded file: " + ex.getMessage();
+                                    " <b>[Error]</b>:<br>Error encrypting file: " + ex.getMessage();
                                 
                                 sendGroupMessage(errorMessage, currentGroupId);
                                 
@@ -662,10 +662,22 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         } catch (IOException e) {
             String errorTimestamp = dateFormat.format(new Date());
             String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                " <b>[error]</b>:<br>error of file : " + e.getMessage();
+                " <b>[Error]</b>:<br>Error processing file: " + e.getMessage();
             
             sendGroupMessage(errorMessage, currentGroupId);
         }
+        
+        // IMPORTANT: Clear the upload component to allow new uploads
+        upload.getElement().executeJs("this.files = []");
+    });
+    
+    // Handle the file reject event
+    upload.addFileRejectedListener(event -> {
+        String errorMessage = event.getErrorMessage();
+        Notification.show("File rejected: " + errorMessage, 3000, Notification.Position.MIDDLE);
+        
+        // Also clear the upload component after rejection
+        upload.getElement().executeJs("this.files = []");
     });
 }
     
