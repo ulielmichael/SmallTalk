@@ -8,7 +8,6 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.UIDetachedException;
 import com.vaadin.flow.shared.Registration;
 
-import mu.smalltalk.Chatstorage;
 
 public class GlobalMessageBroadcaster {
     private static final List<BroadcastListener> listeners = new CopyOnWriteArrayList<>();
@@ -63,9 +62,7 @@ public class GlobalMessageBroadcaster {
             return;
         }
         
-        // Store message in group-specific persistent storage
-        Chatstorage.addGroupMessage(message, groupId);
-        
+        // Store message in group-specific persistent storage        
         System.out.println("Broadcasting message to group " + groupId + ": " + message);
         System.out.println("Active listeners: " + listeners.size());
         
@@ -113,7 +110,6 @@ public class GlobalMessageBroadcaster {
      */
     public static synchronized void broadcast(String message) {
         // Store message in persistent storage
-        Chatstorage.addMessage(message);
         
         System.out.println("Broadcasting global message: " + message);
         System.out.println("Active listeners: " + listeners.size());

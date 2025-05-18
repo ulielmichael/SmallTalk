@@ -5,16 +5,38 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import mu.smalltalk.secriuty.Aes256;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
+import mu.smalltalk.secriuty.Aes256;
+@Service
 public class EncryptionService {
 
     private final Aes256 encryptionEngine;
     private final ExecutorService executorService;
 
+  @Autowired(required = false)
     public EncryptionService(Aes256 encryptionEngine) {
-        this.encryptionEngine = encryptionEngine;
+        this.encryptionEngine = encryptionEngine != null ? encryptionEngine : initializeEncryption();
         this.executorService = Executors.newFixedThreadPool(2);
+    }
+       public EncryptionService() {
+        this.encryptionEngine = initializeEncryption();
+        this.executorService = Executors.newFixedThreadPool(2);
+    }
+        private Aes256 initializeEncryption() {
+        try {
+            byte[] key = new byte[32];
+        
+            for (int i = 0; i < key.length; i++) {
+                key[i] = (byte) i;
+            }
+            
+            return new Aes256(key);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Failed to initialize Aes256", e);
+        }
     }
 
     private byte[] padData(byte[] input) {
@@ -115,5 +137,10 @@ public class EncryptionService {
 
     public void shutdown() {
         executorService.shutdown();
+    }
+
+    public byte[] encrypt(String message) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'encrypt'");
     }
 }

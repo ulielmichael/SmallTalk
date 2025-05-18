@@ -1,44 +1,5 @@
 package mu.smalltalk.Pages;
 
-import com.vaadin.flow.component.AttachEvent;
-import com.vaadin.flow.component.DetachEvent;
-import com.vaadin.flow.component.UI;
-import com.vaadin.flow.component.Unit;
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.combobox.ComboBox;
-import com.vaadin.flow.component.dialog.Dialog;
-import com.vaadin.flow.component.combobox.MultiSelectComboBox;
-import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.icon.Icon;
-import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.messages.MessageInput;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.page.Push;
-import com.vaadin.flow.component.shared.Tooltip;
-import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.component.upload.Upload;
-import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
-import com.vaadin.flow.router.BeforeEnterEvent;
-import com.vaadin.flow.router.BeforeEnterObserver;
-import com.vaadin.flow.router.Route;
-import com.vaadin.flow.router.RouteParameters;
-import com.vaadin.flow.server.VaadinSession;
-import com.vaadin.flow.shared.Registration;
-
-import mu.smalltalk.Services.EncryptionService;
-import mu.smalltalk.Services.GlobalMessageBroadcaster;
-import mu.smalltalk.Services.MongoDbSerivce;
-import mu.smalltalk.Services.GroupService;
-import mu.smalltalk.Services.UserService;
-import mu.smalltalk.entitis.Group;
-import mu.smalltalk.entitis.User;
-import mu.smalltalk.secriuty.Aes256;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -53,13 +14,62 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.DetachEvent;
+import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.Unit;
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.combobox.MultiSelectComboBox;
+import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.H3;
+import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.messages.MessageInput;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.shared.Tooltip;
+import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.upload.Upload;
+import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
+import com.vaadin.flow.router.BeforeEnterEvent;
+import com.vaadin.flow.router.BeforeEnterObserver;
+import com.vaadin.flow.router.Route;
+import com.vaadin.flow.server.VaadinSession;
+import com.vaadin.flow.shared.Registration;
+
+import mu.smalltalk.Services.EncryptionService;
+import mu.smalltalk.Services.GlobalMessageBroadcaster;
+import mu.smalltalk.Services.GroupService;
+import mu.smalltalk.Services.MongoDbSerivce;
+import mu.smalltalk.Services.UserService;
+import mu.smalltalk.entitis.Group;
+import mu.smalltalk.entitis.Message;
+import mu.smalltalk.entitis.User;
+import mu.smalltalk.repositoriy.MessageRepository;
+import mu.smalltalk.secriuty.Aes256;
+
 @Route("chat")
 public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
 
-    private final MessageInput messageInput;
-    private Upload mediaUpload;
+    @Autowired
+    private MessageRepository messageRepository;
+    
+    @Autowired
+    private MongoDbSerivce mongoDbService;
+
+    @Autowired
+    private final EncryptionService encryptionService;
+
+        private final MessageInput messageInput;
+        private Upload mediaUpload;
         private final Aes256 aes;
-        private final EncryptionService encryptionService;
         private final VerticalLayout chatContainer;
         private final VerticalLayout userListContainer; // Added user list container
         private static final int CHAT_HEIGHT = 500;
@@ -190,6 +200,35 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
             setupMessageHandler();
             setupCrossBrowserCommunication();
         }
+        private void addMessageToDatabase(String formattedMessage, String groupId) {
+    if (groupId == null) {
+        System.err.println("Cannot save message: Group ID is null");
+        return;
+    }
+    
+    User currentUser = UserService.getAuthenticatedUser();
+    String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
+    
+    // המרת ההודעה המפורמטת לבייטים
+    byte[] messageBytes = formattedMessage.getBytes(StandardCharsets.UTF_8);
+    
+    // יצירת אובייקט הודעה ושמירה במסד הנתונים
+    Message message = new Message(senderId, groupId, messageBytes, null, null, groupId);
+    messageRepository.save(message);
+}
+
+private List<String> getMessagesFromDatabase(String groupId) {
+    if (groupId == null) {
+        return new ArrayList<>();
+    }
+    
+    List<Message> messages = messageRepository.findByChatId(groupId);
+    
+    return messages.stream()
+            .filter(message -> message.getTextContent() != null)
+            .map(message -> new String(message.getTextContent(), StandardCharsets.UTF_8))
+            .collect(Collectors.toList());
+}
     
         private Div createMessageInputWithUpload() {
             // Main wrapper div that will contain both the input and upload button
@@ -292,22 +331,22 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         }
     }
 
-    private void loadExistingMessages() {
-        if (currentGroupId == null) {
-            return;
-        }
-        
-        List<String> existingMessages = ChatStorage.getGroupMessages(currentGroupId);
-        
-        chatContainer.removeAll();
-        
-        for (String message : existingMessages) {
-            addMessageToChat(message);
-        }
-        lastSeenMessageCount = existingMessages.size();
-
-        scrollToBottom();
+  private void loadExistingMessages() {
+    if (currentGroupId == null) {
+        return;
     }
+    
+    List<String> existingMessages = getMessagesFromDatabase(currentGroupId);
+    
+    chatContainer.removeAll();
+    
+    for (String message : existingMessages) {
+        addMessageToChat(message);
+    }
+    lastSeenMessageCount = existingMessages.size();
+
+    scrollToBottom();
+}
     
     private void refreshChatHistory() {
         UI ui = UI.getCurrent();
@@ -419,32 +458,32 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         }
     }
 
-    public void checkForNewMessages() {
-        if (currentGroupId == null) {
-            return;
-        }
-        
-        UI ui = UI.getCurrent();
-        if (ui != null && ui.isAttached()) {
-            ui.access(() -> {
-                List<String> allMessages = ChatStorage.getGroupMessages(currentGroupId);
-                int currentMessageCount = allMessages.size();
-
-                if (currentMessageCount > lastSeenMessageCount) {
-                    for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
-                        addMessageToChat(allMessages.get(i));
-                    }
-                    lastSeenMessageCount = currentMessageCount;
-
-                    scrollToBottom();
-                    
-                    ui.getPage().executeJs("window.notifyOtherWindows();");
-                    
-                    ui.push();
-                }
-            });
-        }
+  public void checkForNewMessages() {
+    if (currentGroupId == null) {
+        return;
     }
+    
+    UI ui = UI.getCurrent();
+    if (ui != null && ui.isAttached()) {
+        ui.access(() -> {
+            List<String> allMessages = getMessagesFromDatabase(currentGroupId);
+            int currentMessageCount = allMessages.size();
+
+            if (currentMessageCount > lastSeenMessageCount) {
+                for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
+                    addMessageToChat(allMessages.get(i));
+                }
+                lastSeenMessageCount = currentMessageCount;
+
+                scrollToBottom();
+                
+                ui.getPage().executeJs("window.notifyOtherWindows();");
+                
+                ui.push();
+            }
+        });
+    }
+}
 
     private void registerWithBroadcaster() {
         UI ui = UI.getCurrent();
@@ -461,10 +500,6 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
                 if (ui.isAttached() && (currentGroupId != null && currentGroupId.equals(groupId))) {
                     ui.access(() -> {
                         addMessageToChat(message);
-                        
-                        if (currentGroupId != null) {
-                            lastSeenMessageCount = ChatStorage.getGroupMessages(currentGroupId).size();
-                        }
                         
                         scrollToBottom();
                         ui.push();
@@ -588,37 +623,42 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
     Tooltip.forComponent(uploadButton).withText("Upload an image or audio").withPosition(Tooltip.TooltipPosition.TOP);
     
     // Add handlers for upload events
-    upload.addSucceededListener(event -> {
-        if (currentGroupId == null) {
-            Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
-            return;
-        }
-        
-        UI ui = UI.getCurrent();
-        VaadinSession session = VaadinSession.getCurrent();
-        
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-        
-        String fileName = event.getFileName();
-        String mimeType = event.getMIMEType();
-        try {
-            InputStream inputStream = buffer.getInputStream();
-            byte[] fileData = inputStream.readAllBytes();
-            String base64Data = Base64.getEncoder().encodeToString(fileData);
-            String timestamp = dateFormat.format(new Date());
+upload.addSucceededListener(event -> {
+    if (currentGroupId == null) {
+        Notification.show("נא לבחור קבוצה תחילה", 2000, Notification.Position.MIDDLE);
+        return;
+    }
+    
+    UI ui = UI.getCurrent();
+    VaadinSession session = VaadinSession.getCurrent();
+    
+    User currentUser = UserService.getAuthenticatedUser();
+    String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+    String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
+    
+    String fileName = event.getFileName();
+    String mimeType = event.getMIMEType();
+    try {
+        InputStream inputStream = buffer.getInputStream();
+        byte[] fileData = inputStream.readAllBytes();
+        String base64Data = Base64.getEncoder().encodeToString(fileData);
+        String timestamp = dateFormat.format(new Date());
 
-            if (mimeType.startsWith("image/")) {
-                String imageHtml = "[" + timestamp + "] " + displayName + " <b>[Image]</b>:<br>" +
-                    "<img src='data:" + mimeType + ";base64," + base64Data +
-                    "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
-                sendGroupMessage(imageHtml, currentGroupId);
-            } else if (mimeType.startsWith("audio/")) {
-                String audioHtml = "[" + timestamp + "] " + displayName + " <b>[Audio]</b>:<br>" +
-                    "<audio controls><source src='data:" + mimeType + ";base64," +
-                    base64Data + "' type='" + mimeType + "'></audio>";
-                sendGroupMessage(audioHtml, currentGroupId);
-            }
+        String mediaType = mimeType.startsWith("image/") ? "IMAGE" : "SOUND";
+        Message mediaMessage = new Message(senderId, currentGroupId, null, fileData, mediaType, currentGroupId);
+        messageRepository.save(mediaMessage);
+
+        if (mimeType.startsWith("image/")) {
+            String imageHtml = "[" + timestamp + "] " + displayName + " <b>[תמונה]</b>:<br>" +
+                "<img src='data:" + mimeType + ";base64," + base64Data +
+                "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
+            sendGroupMessage(imageHtml, currentGroupId);
+        } else if (mimeType.startsWith("audio/")) {
+            String audioHtml = "[" + timestamp + "] " + displayName + " <b>[אודיו]</b>:<br>" +
+                "<audio controls><source src='data:" + mimeType + ";base64," +
+                base64Data + "' type='" + mimeType + "'></audio>";
+            sendGroupMessage(audioHtml, currentGroupId);
+        }
 
             final byte[] finalFileData = fileData;
             encryptionService.encryptAsync(finalFileData)
@@ -682,22 +722,18 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
 }
     
 
-    private void sendGroupMessage(String message, String groupId) {
-        if (groupId == null) {
-            System.err.println("Cannot send message: Group ID is null");
-            return;
-        }
-        
-        // Store message in the group's chat history
-        ChatStorage.addGroupMessage(groupId, message);
-        
-        // Broadcast message to all connected clients
-        GlobalMessageBroadcaster.broadcastToGroup(message, groupId);
-        
-        // Notify other browser windows/tabs
-        UI.getCurrent().getPage().executeJs("window.notifyOtherWindows();");
+private void sendGroupMessage(String message, String groupId) {
+    if (groupId == null) {
+        System.err.println("Cannot send message: Group ID is null");
+        return;
     }
-
+    
+    addMessageToDatabase(message, groupId);
+    
+    GlobalMessageBroadcaster.broadcastToGroup(message, groupId);
+    
+    UI.getCurrent().getPage().executeJs("window.notifyOtherWindows();");
+}
     private void addMessageToChat(String message) {
         Div messageDiv = new Div();
         messageDiv.getElement().setProperty("innerHTML", message);
@@ -938,15 +974,5 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
         }
     }
     
-    private static class ChatStorage {
-        private static final Map<String, List<String>> groupMessages = new HashMap<>();
-        
-        public static synchronized void addGroupMessage(String groupId, String message) {
-            groupMessages.computeIfAbsent(groupId, k -> new ArrayList<>()).add(message);
-        }
-        
-        public static synchronized List<String> getGroupMessages(String groupId) {
-            return new ArrayList<>(groupMessages.getOrDefault(groupId, new ArrayList<>()));
-        }
-    }
+ 
 }
