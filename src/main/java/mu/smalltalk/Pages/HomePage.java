@@ -58,12 +58,16 @@ public class HomePage extends VerticalLayout {
             .set("top", "0")
             .set("z-index", "1000");
         
-        // Logo
-        H2 logo = new H2("SmallTalk");
+        // Logo - החלפת H2 בתמונה
+        Image logo = new Image("images/icon.png", "SmallTalk");
+        logo.setHeight("40px");
+        logo.setWidth("auto");
         logo.getStyle()
             .set("margin", "0")
-            .set("color", "#2a5885")
-            .set("font-weight", "700");
+            .set("cursor", "pointer");
+        
+        // הוספת קליק לחזרה לעמוד הבית
+        logo.addClickListener(e -> logo.getUI().ifPresent(ui -> ui.navigate("")));
         
         // Navigation links
         HorizontalLayout navLinks = new HorizontalLayout();
@@ -110,7 +114,7 @@ public class HomePage extends VerticalLayout {
             .set("color", "white")
             .set("padding", "80px 24px")
             .set("text-align", "center");
-        
+
         H1 title = new H1("SmallTalk");
         title.getStyle()
             .set("font-size", "48px")
