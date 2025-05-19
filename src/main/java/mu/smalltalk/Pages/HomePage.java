@@ -44,66 +44,82 @@ public class HomePage extends VerticalLayout {
         add(navbar, heroSection, featuresSection, securitySection, technologySection, footer);
     }
     
-    private HorizontalLayout createNavigationBar() {
-        HorizontalLayout navbar = new HorizontalLayout();
-        navbar.setWidthFull();
-        navbar.setHeight("64px");
-        navbar.setJustifyContentMode(JustifyContentMode.BETWEEN);
-        navbar.setAlignItems(Alignment.CENTER);
-        navbar.getStyle()
-            .set("background-color", "#ffffff")
-            .set("padding", "0 24px")
-            .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)")
-            .set("position", "sticky")
-            .set("top", "0")
-            .set("z-index", "1000");
-        
-        // Logo - החלפת H2 בתמונה
-        Image logo = new Image("images/icon.png", "SmallTalk");
-        logo.setHeight("40px");
-        logo.setWidth("auto");
-        logo.getStyle()
-            .set("margin", "0")
-            .set("cursor", "pointer");
-        
-        // הוספת קליק לחזרה לעמוד הבית
-        logo.addClickListener(e -> logo.getUI().ifPresent(ui -> ui.navigate("")));
-        
-        // Navigation links
-        HorizontalLayout navLinks = new HorizontalLayout();
-        navLinks.setSpacing(true);
-        
-        Anchor homeLink = new Anchor("#", "Home");
-        homeLink.getStyle().set("font-weight", "bold");
 
-        Anchor chatlink = new Anchor("chat", "Chat");
-        Anchor loginLink = new Anchor("login", "Login");
-        Anchor logoutLink = new Anchor("logout", "Logout");
-        Anchor signupLink = new Anchor("signup", "Signup");
-        Anchor featuresLink = new Anchor("#features", "Features");
-        Anchor securityLink = new Anchor("#security", "Security");
-        Anchor techLink = new Anchor("#technology", "Technology");
-        Anchor aboutLink = new Anchor("#about", "About");
-        
-        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, logoutLink, signupLink);
-        
-        // Style all links
-        for (int i = 0; i < navLinks.getComponentCount(); i++) {
-            com.vaadin.flow.component.Component component = navLinks.getComponentAt(i);
-            if (component instanceof Anchor) {
-                ((Anchor) component).getStyle()
-                    .set("color", "#444")
-                    .set("text-decoration", "none")
-                    .set("margin", "0 12px")
-                    .set("padding", "6px 12px")
-                    .set("border-radius", "4px")
-                    .set("transition", "background-color 0.3s");
-            }
+private HorizontalLayout createNavigationBar() {
+    HorizontalLayout navbar = new HorizontalLayout();
+    navbar.setWidthFull();
+    navbar.setHeight("64px");
+    navbar.setJustifyContentMode(JustifyContentMode.BETWEEN);
+    navbar.setAlignItems(Alignment.CENTER);
+    navbar.getStyle()
+        .set("background-color", "#ffffff")
+        .set("padding", "0 24px")
+        .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)")
+        .set("position", "sticky")
+        .set("top", "0")
+        .set("z-index", "1000");
+    
+    // לוגו עם טקסט - יצירת מיכל אופקי עבור הלוגו והטקסט
+    HorizontalLayout logoContainer = new HorizontalLayout();
+    logoContainer.setAlignItems(Alignment.CENTER);
+    logoContainer.setSpacing(true);
+    logoContainer.getStyle().set("cursor", "pointer");
+    
+    // תמונת הלוגו
+    Image logo = new Image("images/live-chat.png", "SmallTalk");
+    logo.setHeight("40px");
+    logo.setWidth("auto");
+    
+    // טקסט הלוגו
+    H3 logoText = new H3("SmallTalk");
+    logoText.getStyle()
+        .set("margin", "0")
+        .set("color", "#2a5885")
+        .set("font-weight", "bold")
+        .set("font-size", "22px");
+    
+    // הוספת הלוגו והטקסט למיכל
+    logoContainer.add(logo, logoText);
+    
+    // הוספת קליק לחזרה לעמוד הבית
+    logoContainer.addClickListener(e -> logoContainer.getUI().ifPresent(ui -> ui.navigate("")));
+    
+    // Navigation links
+    HorizontalLayout navLinks = new HorizontalLayout();
+    navLinks.setSpacing(true);
+    
+    Anchor homeLink = new Anchor("#", "Home");
+    homeLink.getStyle().set("font-weight", "bold");
+
+    Anchor chatlink = new Anchor("chat", "Chat");
+    Anchor loginLink = new Anchor("login", "Login");
+    Anchor logoutLink = new Anchor("logout", "Logout");
+    Anchor signupLink = new Anchor("signup", "Signup");
+    Anchor featuresLink = new Anchor("#features", "Features");
+    Anchor securityLink = new Anchor("#security", "Security");
+    Anchor techLink = new Anchor("#technology", "Technology");
+    Anchor aboutLink = new Anchor("#about", "About");
+    
+    navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, logoutLink, signupLink);
+    
+    // Style all links
+    for (int i = 0; i < navLinks.getComponentCount(); i++) {
+        com.vaadin.flow.component.Component component = navLinks.getComponentAt(i);
+        if (component instanceof Anchor) {
+            ((Anchor) component).getStyle()
+                .set("color", "#444")
+                .set("text-decoration", "none")
+                .set("margin", "0 12px")
+                .set("padding", "6px 12px")
+                .set("border-radius", "4px")
+                .set("transition", "background-color 0.3s");
         }
-        
-        navbar.add(logo, navLinks);
-        return navbar;
     }
+    
+    // הוספת מיכל הלוגו (במקום הלוגו לבד) ותפריט הניווט לסרגל
+    navbar.add(logoContainer, navLinks);
+    return navbar;
+}
     
     private Div createHeroSection() {
         Div heroSection = new Div();
@@ -120,10 +136,18 @@ public class HomePage extends VerticalLayout {
             .set("font-size", "48px")
             .set("margin-bottom", "16px");
         
+        // Add the logo image between title and subtitle
+        Image logoImage = new Image("images/live-chat.png", "SmallTalk ");
+        logoImage.setHeight("300px");
+        logoImage.setWidth("3   00px");
+        logoImage.getStyle()
+            .set("margin", "20px auto")
+            .set("display", "block");
+        
         H3 subtitle = new H3("Secure End-to-End Encrypted Communication Platform");
         subtitle.getStyle()
             .set("font-weight", "400")
-            .set("margin-top", "0")
+            .set("margin-top", "16px")
             .set("margin-bottom", "32px");
         
         Paragraph description = new Paragraph("SmallTalk provides a comprehensive solution for the growing need for privacy and data security through an End-to-End encryption mechanism. Designed for private and group conversations, encrypted file sharing in real-time, ensuring complete protection of user data.");
@@ -146,7 +170,7 @@ public class HomePage extends VerticalLayout {
             .set("transition", "background-color 0.3s")
             .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)");
         
-        heroSection.add(title, subtitle, description, ctaButton);
+        heroSection.add(title, logoImage, subtitle, description, ctaButton);
         return heroSection;
     }
     
