@@ -24,6 +24,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.html.Anchor;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
@@ -83,135 +84,194 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
 
     private int lastSeenMessageCount = 0;
 
-    public ChatPage() {
-        sessionId = initializeSessionId();
+   public ChatPage() {
+    sessionId = initializeSessionId();
 
-        aes = initializeEncryption();
-        encryptionService = new EncryptionService(aes);
+    aes = initializeEncryption();
+    encryptionService = new EncryptionService(aes);
 
-        messageInput = new MessageInput();
-        chatContainer = new VerticalLayout();
-        userListContainer = new VerticalLayout(); // Initialize user list container
+    messageInput = new MessageInput();
+    chatContainer = new VerticalLayout();
+    userListContainer = new VerticalLayout(); // Initialize user list container
 
-        chatContainer.setWidthFull();
-        chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
+    chatContainer.setWidthFull();
+    chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
 
-        chatContainer.getStyle().set("overflow-y", "auto");
-        chatContainer.getStyle().set("border", "1px solid #ddd");
-        chatContainer.addClassName("chat-container"); // Add this class for JavaScript to identify
+    chatContainer.getStyle().set("overflow-y", "auto");
+    chatContainer.getStyle().set("border", "1px solid #ddd");
+    chatContainer.addClassName("chat-container"); // Add this class for JavaScript to identify
 
-        // Configure user list container
-        userListContainer.setWidthFull();
-        userListContainer.getStyle().set("padding", "10px");
-        userListContainer.getStyle().set("margin-bottom", "10px");
-        userListContainer.getStyle().set("border", "1px solid #ddd");
-        userListContainer.getStyle().set("border-radius", "4px");
+    // Configure user list container
+    userListContainer.setWidthFull();
+    userListContainer.getStyle().set("padding", "10px");
+    userListContainer.getStyle().set("margin-bottom", "10px");
+    userListContainer.getStyle().set("border", "1px solid #ddd");
+    userListContainer.getStyle().set("border-radius", "4px");
 
-        // Initially hide user list container
-        userListContainer.setVisible(false);
+    // Initially hide user list container
+    userListContainer.setVisible(false);
 
-        // Create message input and upload layout in a custom way
-        Div messageInputWrapper = createMessageInputWithUpload();
+    // Create message input and upload layout in a custom way
+    Div messageInputWrapper = createMessageInputWithUpload();
 
-        // Use authenticated user's email or name if available
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+    // Use authenticated user's email or name if available
+    User currentUser = UserService.getAuthenticatedUser();
+    String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
 
-        // Create header with just the user's name
-        H2 userHeader = new H2(displayName);
+    // Create header with just the user's name
+    H2 userHeader = new H2(displayName);
 
-        // Create group selector
-        groupSelector = new ComboBox<>("Select Group");
-        groupSelector.setItemLabelGenerator(Group::getName);
-        groupSelector.setWidthFull();
+    // Create group selector
+    groupSelector = new ComboBox<>("Select Group");
+    groupSelector.setItemLabelGenerator(Group::getName);
+    groupSelector.setWidthFull();
 
-        // Create new group button
-        Button newGroupButton = new Button("Create New Group");
-        newGroupButton.addClickListener(e -> createNewGroup());
+    // Create new group button
+    Button newGroupButton = new Button("Create New Group");
+    newGroupButton.addClickListener(e -> createNewGroup());
 
-        // Fill the group selector with the groups the user belongs to
-        if (currentUser != null) {
-            List<Group> userGroups = GroupService.getUserGroups(currentUser.getEmail());
+    // Fill the group selector with the groups the user belongs to
+    if (currentUser != null) {
+        List<Group> userGroups = GroupService.getUserGroups(currentUser.getEmail());
 
-            // If no groups exist, create a default group for this user
-            if (userGroups.isEmpty()) {
-                System.out.println("No groups found for user " + currentUser.getEmail() + ", creating a default group");
-                Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getEmail());
-                userGroups = GroupService.getUserGroups(currentUser.getEmail());
-            }
-
-            groupSelector.setItems(userGroups);
+        // If no groups exist, create a default group for this user
+        if (userGroups.isEmpty()) {
+            System.out.println("No groups found for user " + currentUser.getEmail() + ", creating a default group");
+            Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getEmail());
+            userGroups = GroupService.getUserGroups(currentUser.getEmail());
         }
 
-        groupSelector.addValueChangeListener(event -> {
-            System.out.println("Selected Group: " + event.getValue());
-
-            if (event.getValue() != null) {
-                currentGroupId = event.getValue().getId();
-                System.out.println("Current Group ID set to: " + currentGroupId);
-
-                // Show user list when a group is selected
-                userListContainer.setVisible(true);
-
-                User loggedInUser = UserService.getAuthenticatedUser();
-                String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
-
-                // Just show the user name, not the group name
-                updateSessionIdDisplay(userName);
-
-                refreshChatHistory();
-                updateUserList();
-            } else {
-                // Hide user list when no group is selected
-                userListContainer.setVisible(false);
-            }
-        });
-
-        // Create action buttons layout with only the new group button
-        HorizontalLayout actionButtons = new HorizontalLayout();
-        actionButtons.add(newGroupButton);
-        actionButtons.setWidthFull();
-        actionButtons.setSpacing(true);
-
-        // Create toolbar with home and logout buttons
-        HorizontalLayout toolbar = new HorizontalLayout();
-        toolbar.setWidthFull();
-        toolbar.setJustifyContentMode(JustifyContentMode.END);
-
-        Button homeButton = new Button();
-        Image homeImage = new Image("images/home.png", "Home");
-        homeImage.setWidth("40px");
-        homeImage.setHeight("40px");
-        homeButton.getElement().appendChild(homeImage.getElement());
-        homeButton.getStyle().set("background", "transparent");
-        homeButton.getStyle().set("border", "none");
-        homeButton.getStyle().set("padding", "0");
-        homeButton.addClickListener(e -> UI.getCurrent().navigate("")); // Navigate to home page
-
-        Button logoutButton = new Button();
-        Image logoutImage = new Image("images/logout.png", "Logout");
-        logoutImage.setWidth("40px");
-        logoutImage.setHeight("40px");
-        logoutButton.getElement().appendChild(logoutImage.getElement());
-        logoutButton.getStyle().set("background", "transparent");
-        logoutButton.getStyle().set("border", "none");
-        logoutButton.getStyle().set("padding", "0");
-        logoutButton.getStyle().set("margin-left", "16px");
-        logoutButton.addClickListener(e -> UI.getCurrent().navigate("logout")); 
-
-
-        toolbar.add(homeButton, logoutButton);
-
-        // Add a section for user list
-        H3 userListHeader = new H3("Group Members");
-
-        // Add components to main layout in the correct order
-        add(toolbar, userHeader, groupSelector, userListHeader, userListContainer, chatContainer, messageInputWrapper,
-                actionButtons);
-
-        setupMessageHandler();
-        setupCrossBrowserCommunication();
+        groupSelector.setItems(userGroups);
     }
+
+    groupSelector.addValueChangeListener(event -> {
+        System.out.println("Selected Group: " + event.getValue());
+
+        if (event.getValue() != null) {
+            currentGroupId = event.getValue().getId();
+            System.out.println("Current Group ID set to: " + currentGroupId);
+
+            // Show user list when a group is selected
+            userListContainer.setVisible(true);
+
+            User loggedInUser = UserService.getAuthenticatedUser();
+            String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
+
+            // Just show the user name, not the group name
+            updateSessionIdDisplay(userName);
+
+            refreshChatHistory();
+            updateUserList();
+        } else {
+            // Hide user list when no group is selected
+            userListContainer.setVisible(false);
+        }
+    });
+    
+    // Create action buttons layout with only the new group button
+    HorizontalLayout actionButtons = new HorizontalLayout();
+    actionButtons.add(newGroupButton);
+    actionButtons.setWidthFull();
+    actionButtons.setSpacing(true);
+
+    // Create the navigation bar
+    HorizontalLayout navbar = createNavigationBar();
+
+    // Add a section for user list
+    H3 userListHeader = new H3("Group Members");
+    H3 chatHeader = new H3("Chat");
+
+
+    // Add components to main layout in the correct order
+    add(navbar, userHeader, groupSelector, userListHeader, userListContainer, chatHeader,chatContainer, messageInputWrapper,
+            actionButtons);
+
+    setupMessageHandler();
+    setupCrossBrowserCommunication();
+}
+    // Add this method to your ChatPage class
+private HorizontalLayout createNavigationBar() {
+    HorizontalLayout navbar = new HorizontalLayout();
+    navbar.setWidthFull();
+    navbar.setHeight("64px");
+    navbar.setJustifyContentMode(JustifyContentMode.BETWEEN);
+    navbar.setAlignItems(Alignment.CENTER);
+    navbar.getStyle()
+        .set("background-color", "#ffffff")
+        .set("padding", "0 24px")
+        .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)")
+        .set("position", "sticky")
+        .set("top", "0")
+        .set("z-index", "1000");
+    
+    // Logo container with image and text
+    HorizontalLayout logoContainer = new HorizontalLayout();
+    logoContainer.setAlignItems(Alignment.CENTER);
+    logoContainer.setSpacing(true);
+    logoContainer.getStyle().set("cursor", "pointer");
+    
+    // Logo image
+    Image logo = new Image("images/live-chat.png", "SmallTalk");
+    logo.setHeight("40px");
+    logo.setWidth("auto");
+    
+    // Logo text
+    H3 logoText = new H3("SmallTalk");
+    logoText.getStyle()
+        .set("margin", "0")
+        .set("color", "#2a5885")
+        .set("font-weight", "bold")
+        .set("font-size", "22px");
+    
+    // Add logo and text to container
+    logoContainer.add(logo, logoText);
+    
+    // Add click listener to navigate to home page
+    logoContainer.addClickListener(e -> logoContainer.getUI().ifPresent(ui -> ui.navigate("")));
+    
+    // Navigation links
+    HorizontalLayout navLinks = new HorizontalLayout();
+    navLinks.setSpacing(true);
+    
+    Anchor homeLink = new Anchor("", "Home");
+    Anchor chatLink = new Anchor("chat", "Chat");
+    chatLink.getStyle().set("font-weight", "bold"); // Highlight current page
+    Anchor featuresLink = new Anchor("#features", "Features");
+    Anchor securityLink = new Anchor("#security", "Security");
+    Anchor techLink = new Anchor("#technology", "Technology");
+    Anchor aboutLink = new Anchor("#about", "About");
+    
+    // Authentication links - conditionally show based on authentication status
+    User currentUser = UserService.getAuthenticatedUser();
+    if (currentUser != null) {
+        // User is logged in, show logout
+        Anchor logoutLink = new Anchor("logout", "Logout");
+        navLinks.add(homeLink, chatLink, featuresLink, securityLink, techLink, aboutLink, logoutLink);
+    } else {
+        // User is not logged in, show login and signup
+        Anchor loginLink = new Anchor("login", "Login");
+        Anchor signupLink = new Anchor("signup", "Signup");
+        navLinks.add(homeLink, chatLink, featuresLink, securityLink, techLink, aboutLink, loginLink, signupLink);
+    }
+    
+    // Style all links
+    for (int i = 0; i < navLinks.getComponentCount(); i++) {
+        com.vaadin.flow.component.Component component = navLinks.getComponentAt(i);
+        if (component instanceof Anchor) {
+            ((Anchor) component).getStyle()
+                .set("color", "#444")
+                .set("text-decoration", "none")
+                .set("margin", "0 12px")
+                .set("padding", "6px 12px")
+                .set("border-radius", "4px")
+                .set("transition", "background-color 0.3s");
+        }
+    }
+    
+    // Add logo container and navigation links to navbar
+    navbar.add(logoContainer, navLinks);
+    return navbar;
+}
 
     private void addMessageToDatabase(String formattedMessage, String groupId) {
         if (groupId == null) {
