@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 
 import mu.smalltalk.entitis.Message;
 import mu.smalltalk.entitis.User;
-import mu.smalltalk.repositoriy.MessageRepository;
+import mu.smalltalk.Repositories.MessageRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;

@@ -1,4 +1,4 @@
-package mu.smalltalk.repositoriy;
+package mu.smalltalk.Repositories;
 
 import java.util.List;
 

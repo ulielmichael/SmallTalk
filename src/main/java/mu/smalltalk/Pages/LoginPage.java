@@ -43,6 +43,9 @@ public class LoginPage extends VerticalLayout {
         setSizeFull();
         getStyle().set("background-color", "#f5f7fa");
         
+        // Add navigation bar at the top
+        HorizontalLayout navbar = createNavigationBar();
+        
         // Create the two-column layout
         HorizontalLayout mainLayout = new HorizontalLayout();
         mainLayout.setSizeFull();
@@ -61,7 +64,84 @@ public class LoginPage extends VerticalLayout {
         mainLayout.setFlexGrow(1, leftColumn);
         mainLayout.setFlexGrow(1, rightColumn);
         
-        add(mainLayout);
+        // Add navbar and main layout to the page
+        add(navbar, mainLayout);
+    }
+    
+    // Navigation bar method copied from HomePage
+    private HorizontalLayout createNavigationBar() {
+        HorizontalLayout navbar = new HorizontalLayout();
+        navbar.setWidthFull();
+        navbar.setHeight("64px");
+        navbar.setJustifyContentMode(JustifyContentMode.BETWEEN);
+        navbar.setAlignItems(Alignment.CENTER);
+        navbar.getStyle()
+            .set("background-color", "#ffffff")
+            .set("padding", "0 24px")
+            .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)")
+            .set("position", "sticky")
+            .set("top", "0")
+            .set("z-index", "1000");
+        
+        // Logo with text - create horizontal container for logo and text
+        HorizontalLayout logoContainer = new HorizontalLayout();
+        logoContainer.setAlignItems(Alignment.CENTER);
+        logoContainer.setSpacing(true);
+        logoContainer.getStyle().set("cursor", "pointer");
+        
+        // Logo image
+        Image logo = new Image("images/live-chat.png", "SmallTalk");
+        logo.setHeight("40px");
+        logo.setWidth("auto");
+        
+        // Logo text
+        H3 logoText = new H3("SmallTalk");
+        logoText.getStyle()
+            .set("margin", "0")
+            .set("color", "#2a5885")
+            .set("font-weight", "bold")
+            .set("font-size", "22px");
+        
+        // Add logo and text to container
+        logoContainer.add(logo, logoText);
+        
+        // Add click to return to home page
+        logoContainer.addClickListener(e -> logoContainer.getUI().ifPresent(ui -> ui.navigate("")));
+        
+        // Navigation links
+        HorizontalLayout navLinks = new HorizontalLayout();
+        navLinks.setSpacing(true);
+        
+        Anchor homeLink = new Anchor("", "Home");
+        Anchor chatlink = new Anchor("chat", "Chat");
+        Anchor loginLink = new Anchor("login", "Login");
+        loginLink.getStyle().set("font-weight", "bold"); // Highlight the current page
+        Anchor logoutLink = new Anchor("logout", "Logout");
+        Anchor signupLink = new Anchor("signup", "Signup");
+        Anchor featuresLink = new Anchor("#features", "Features");
+        Anchor securityLink = new Anchor("#security", "Security");
+        Anchor techLink = new Anchor("#technology", "Technology");
+        Anchor aboutLink = new Anchor("#about", "About");
+        
+        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, logoutLink, signupLink);
+        
+        // Style all links
+        for (int i = 0; i < navLinks.getComponentCount(); i++) {
+            com.vaadin.flow.component.Component component = navLinks.getComponentAt(i);
+            if (component instanceof Anchor) {
+                ((Anchor) component).getStyle()
+                    .set("color", "#444")
+                    .set("text-decoration", "none")
+                    .set("margin", "0 12px")
+                    .set("padding", "6px 12px")
+                    .set("border-radius", "4px")
+                    .set("transition", "background-color 0.3s");
+            }
+        }
+        
+        // Add logo container and nav links to navbar
+        navbar.add(logoContainer, navLinks);
+        return navbar;
     }
     
     private VerticalLayout createLoginFormColumn() {
@@ -260,29 +340,29 @@ public class LoginPage extends VerticalLayout {
         return column;
     }
     
-// Validate form method
-private boolean validateForm() {
-    boolean isValid = true;
-    
-    // Clear previous validation states
-    emailField.setInvalid(false);
-    passwordField.setInvalid(false);
-    
-    // Basic validation for empty fields
-    if (emailField.getValue() == null || emailField.getValue().trim().isEmpty()) {
-        emailField.setErrorMessage("Email is required");
-        emailField.setInvalid(true);
-        isValid = false;
+    // Validate form method
+    private boolean validateForm() {
+        boolean isValid = true;
+        
+        // Clear previous validation states
+        emailField.setInvalid(false);
+        passwordField.setInvalid(false);
+        
+        // Basic validation for empty fields
+        if (emailField.getValue() == null || emailField.getValue().trim().isEmpty()) {
+            emailField.setErrorMessage("Email is required");
+            emailField.setInvalid(true);
+            isValid = false;
+        }
+        
+        if (passwordField.getValue() == null || passwordField.getValue().trim().isEmpty()) {
+            passwordField.setErrorMessage("Password is required");
+            passwordField.setInvalid(true);
+            isValid = false;
+        }
+        
+        return isValid;
     }
-    
-    if (passwordField.getValue() == null || passwordField.getValue().trim().isEmpty()) {
-        passwordField.setErrorMessage("Password is required");
-        passwordField.setInvalid(true);
-        isValid = false;
-    }
-    
-    return isValid;
-}
     
     private VerticalLayout createImageColumn() {
         VerticalLayout column = new VerticalLayout();
@@ -325,5 +405,4 @@ private boolean validateForm() {
         
         return column;
     }
-
 }

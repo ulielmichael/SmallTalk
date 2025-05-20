@@ -1,0 +1,24 @@
+@startuml
+left to right direction
+
+actor "User" as User
+actor "Admin " as Admin
+
+rectangle SmallTalk {
+
+  ' פעולות בסיסיות של משתמש
+  User --> (Sign Up)
+  User --> (Login)
+  User --> (send messege encrypt)
+  User --> (recive messege decrypt)
+  User --> ( HistoryChat )
+
+  ' פעולות מנהל מערכת
+  Admin --> (Login)
+  Admin --> (HistoryChat)
+  Admin --> (mangment users)
+  Admin --> (Manage system settings)
+
+
+}
+@enduml

@@ -5,7 +5,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import mu.smalltalk.entitis.User;
-import mu.smalltalk.repositoriy.UserRepository;
+import mu.smalltalk.Repositories.UserRepository;
 
 import com.vaadin.flow.server.VaadinSession;
 

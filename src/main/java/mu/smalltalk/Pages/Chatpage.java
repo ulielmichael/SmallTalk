@@ -53,8 +53,8 @@ import mu.smalltalk.Services.UserService;
 import mu.smalltalk.entitis.Group;
 import mu.smalltalk.entitis.Message;
 import mu.smalltalk.entitis.User;
-import mu.smalltalk.repositoriy.MessageRepository;
-import mu.smalltalk.secriuty.Aes256;
+import mu.smalltalk.Repositories.MessageRepository;
+import mu.smalltalk.security.Aes256;
 
 @Route("chat")
 public class ChatPage extends VerticalLayout implements BeforeEnterObserver {

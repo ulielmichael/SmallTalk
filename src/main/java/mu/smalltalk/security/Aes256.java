@@ -1,4 +1,4 @@
-package mu.smalltalk.secriuty;
+package mu.smalltalk.security;
 
 import java.io.File;
 import java.io.IOException;

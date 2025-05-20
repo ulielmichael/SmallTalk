@@ -8,7 +8,7 @@ import java.util.concurrent.Executors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import mu.smalltalk.secriuty.Aes256;
+import mu.smalltalk.security.Aes256;
 @Service
 public class EncryptionService {
 

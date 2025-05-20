@@ -10,8 +10,8 @@ import org.springframework.stereotype.Service;
 
 import mu.smalltalk.entitis.Group;
 import mu.smalltalk.entitis.User;
-import mu.smalltalk.repositoriy.GroupRepository;
-import mu.smalltalk.repositoriy.UserRepository;
+import mu.smalltalk.Repositories.GroupRepository;
+import mu.smalltalk.Repositories.UserRepository;
 
 @Service
 public class GroupService {
