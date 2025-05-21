@@ -1,0 +1,54 @@
+@startuml
+' תרשים 3: תהליך שיתוף קבצים מוצפנים
+!theme plain
+skinparam backgroundColor white
+skinparam DefaultFontName Arial
+skinparam DefaultFontSize 12
+skinparam SequenceMessageAlignment center
+skinparam RoundCorner 10
+skinparam ArrowColor #2C3E50
+skinparam LifeLineStrategy nosolid
+skinparam SequenceGroupBodyBackgroundColor transparent
+
+title תהליך שיתוף קבצים מוצפנים
+
+actor "משתמש א\n(שולח)" as A
+participant "לקוח א" as CLA
+participant "שרת" as S
+participant "לקוח ב" as CLB
+actor "משתמש ב\n(מקבל)" as B
+
+A -> CLA: בחירת קובץ לשיתוף עם משתמש ב
+activate CLA
+
+CLA -> CLA: חישוב מפתח ייחודי לקובץ
+CLA -> CLA: הצפנת הקובץ באמצעות AES-256
+CLA -> CLA: חלוקת קובץ גדול לחלקים (אופציונלי)
+CLA -> CLA: יצירת חתימה דיגיטלית על הקובץ המוצפן
+
+CLA -> S: העלאת הקובץ המוצפן לשרת
+activate S
+S -> S: אימות המשתמש והרשאות
+S -> S: אחסון הקובץ המוצפן
+S -> S: שמירת מטא-דאטה (ללא המפתח לפענוח)
+S --> CLA: אישור קבלת הקובץ
+deactivate S
+
+CLA -> S: שליחת התראה למשתמש ב על קובץ חדש
+activate S
+S -> CLB: העברת התראה על קובץ חדש לקוח ב
+activate CLB
+
+CLB -> S: בקשת גישה לקובץ
+S -> S: אימות הרשאות משתמש ב
+S --> CLB: העברת הקובץ המוצפן
+deactivate S
+
+CLA -> CLB: העברת מפתח הצפנת הקובץ (מוצפן ב-ECDH)
+CLB -> CLB: פענוח מפתח הקובץ
+CLB -> CLB: פענוח הקובץ
+CLB -> CLB: אימות שלמות הקובץ באמצעות החתימה הדיגיטלית
+CLB -> B: הצגת הקובץ המפוענח
+deactivate CLB
+deactivate CLA
+@enduml
