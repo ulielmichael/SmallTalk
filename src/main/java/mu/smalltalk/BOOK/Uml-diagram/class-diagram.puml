@@ -1,65 +1,360 @@
 @startuml
+!define RECTANGLE class
 
-package "entities" {
-    class User
-    class Group
-    class Message
+' Entities Package
+package "Entities" {
+    class User {
+        - Long id
+        - String username
+        - String email
+        - String password
+        - LocalDateTime createdAt
+        - LocalDateTime lastLogin
+        - boolean isActive
+        --
+        + User()
+        + User(String username, String email, String password)
+        + Long getId()
+        + void setId(Long id)
+        + String getUsername()
+        + void setUsername(String username)
+        + String getEmail()
+        + void setEmail(String email)
+        + String getPassword()
+        + void setPassword(String password)
+        + LocalDateTime getCreatedAt()
+        + void setCreatedAt(LocalDateTime createdAt)
+        + LocalDateTime getLastLogin()
+        + void setLastLogin(LocalDateTime lastLogin)
+        + boolean isActive()
+        + void setActive(boolean active)
+        + boolean equals(Object obj)
+        + int hashCode()
+        + String toString()
+    }
+
+    class Group {
+        - Long id
+        - String name
+        - String description
+        - User owner
+        - Set<User> members
+        - LocalDateTime createdAt
+        - boolean isPrivate
+        --
+        + Group()
+        + Group(String name, String description, User owner)
+        + Long getId()
+        + void setId(Long id)
+        + String getName()
+        + void setName(String name)
+        + String getDescription()
+        + void setDescription(String description)
+        + User getOwner()
+        + void setOwner(User owner)
+        + Set<User> getMembers()
+        + void setMembers(Set<User> members)
+        + void addMember(User user)
+        + void removeMember(User user)
+        + LocalDateTime getCreatedAt()
+        + void setCreatedAt(LocalDateTime createdAt)
+        + boolean isPrivate()
+        + void setPrivate(boolean isPrivate)
+        + boolean equals(Object obj)
+        + int hashCode()
+        + String toString()
+    }
+
+    class Message {
+        - Long id
+        - String content
+        - User sender
+        - Group group
+        - LocalDateTime timestamp
+        - boolean isRead
+        - MessageType type
+        --
+        + Message()
+        + Message(String content, User sender, Group group)
+        + Long getId()
+        + void setId(Long id)
+        + String getContent()
+        + void setContent(String content)
+        + User getSender()
+        + void setSender(User sender)
+        + Group getGroup()
+        + void setGroup(Group group)
+        + LocalDateTime getTimestamp()
+        + void setTimestamp(LocalDateTime timestamp)
+        + boolean isRead()
+        + void setRead(boolean read)
+        + MessageType getType()
+        + void setType(MessageType type)
+        + boolean equals(Object obj)
+        + int hashCode()
+        + String toString()
+    }
+
+    enum MessageType {
+        TEXT
+        IMAGE
+        FILE
+        SYSTEM
+    }
 }
 
+' Pages Package
 package "Pages" {
-    class ChatPage
-    class HomePage
-    class LoginPage
-    class LogoutPage
-    class SignupPage
+    class HomePage {
+        - UserService userService
+        - GroupService groupService
+        - MessageService messageService
+        --
+        + HomePage(UserService userService, GroupService groupService, MessageService messageService)
+        + String displayHomePage(Model model, HttpServletRequest request)
+        + String getUserDashboard(Model model, Authentication auth)
+        + ResponseEntity<List<Group>> getUserGroups(Authentication auth)
+        + ResponseEntity<List<Message>> getRecentMessages(Authentication auth)
+    }
+
+    class ChatPage {
+        - MessageService messageService
+        - GroupService groupService
+        - UserService userService
+        --
+        + ChatPage(MessageService messageService, GroupService groupService, UserService userService)
+        + String displayChatPage(@PathVariable Long groupId, Model model, Authentication auth)
+        + ResponseEntity<List<Message>> getGroupMessages(@PathVariable Long groupId, Authentication auth)
+        + ResponseEntity<Message> sendMessage(@RequestBody MessageDTO messageDTO, Authentication auth)
+        + ResponseEntity<Void> markMessageAsRead(@PathVariable Long messageId, Authentication auth)
+    }
+
+    class LoginPage {
+        - UserService userService
+        - JWTService jwtService
+        --
+        + LoginPage(UserService userService, JWTService jwtService)
+        + String displayLoginPage()
+        + ResponseEntity<AuthResponseDTO> authenticateUser(@RequestBody LoginRequestDTO loginRequest)
+        + ResponseEntity<String> logout(HttpServletRequest request)
+        + String forgotPassword()
+        + ResponseEntity<String> resetPassword(@RequestBody ResetPasswordDTO resetPasswordDTO)
+    }
+
+    class SignupPage {
+        - UserService userService
+        - ValidationAndPasswordService validationService
+        - EmailRegistrationService emailService
+        --
+        + SignupPage(UserService userService, ValidationAndPasswordService validationService, EmailRegistrationService emailService)
+        + String displaySignupPage()
+        + ResponseEntity<String> registerUser(@RequestBody UserRegistrationDTO registrationDTO)
+        + ResponseEntity<String> verifyEmail(@RequestParam String token)
+        + ResponseEntity<Boolean> checkUsernameAvailability(@RequestParam String username)
+        + ResponseEntity<Boolean> checkEmailAvailability(@RequestParam String email)
+    }
+
+    class LogoutPage {
+        - JWTService jwtService
+        - UserService userService
+        --
+        + LogoutPage(JWTService jwtService, UserService userService)
+        + String displayLogoutPage()
+        + ResponseEntity<String> performLogout(HttpServletRequest request, Authentication auth)
+        + String redirectToLogin()
+    }
 }
 
-package "Repositories" {
-    class UserRepository
-    class GroupRepository
-    class MessageRepository
-}
-
-package "security" {
-    class Aes256
-    class Base64FileHandler
-}
-
+' Services Package
 package "Services" {
-    class ChatService
-    class DigitalSignatureService
-    class ECDHService
-    class EncryptionService
-    class GlobalMessageBroadcaster
-    class GroupService
-    class MessageService
-    class MongoDbService
-    class UserService
+    class ChatService {
+        - MessageService messageService
+        - GroupService groupService
+        - UserService userService
+        --
+        + ChatService(MessageService messageService, GroupService groupService, UserService userService)
+        + Message sendMessage(String content, Long senderId, Long groupId)
+        + List<Message> getGroupMessages(Long groupId, Long userId)
+        + void markMessageAsRead(Long messageId, Long userId)
+        + List<Message> getUnreadMessages(Long userId)
+        + void deleteMessage(Long messageId, Long userId)
+        + Message editMessage(Long messageId, String newContent, Long userId)
+    }
+
+    class MessageService {
+        - MessageRepository messageRepository
+        - UserRepository userRepository
+        - GroupRepository groupRepository
+        --
+        + MessageService(MessageRepository messageRepository, UserRepository userRepository, GroupRepository groupRepository)
+        + Message saveMessage(Message message)
+        + List<Message> findMessagesByGroupId(Long groupId)
+        + List<Message> findUnreadMessagesByUserId(Long userId)
+        + Message findById(Long id)
+        + void deleteMessage(Long id)
+        + Message updateMessage(Long id, String content)
+        + void markAsRead(Long messageId)
+        + List<Message> findRecentMessages(Long userId, int limit)
+    }
+
+    class GroupService {
+        - GroupRepository groupRepository
+        - UserRepository userRepository
+        --
+        + GroupService(GroupRepository groupRepository, UserRepository userRepository)
+        + Group createGroup(Group group)
+        + Group findById(Long id)
+        + List<Group> findGroupsByUserId(Long userId)
+        + Group addMemberToGroup(Long groupId, Long userId)
+        + Group removeMemberFromGroup(Long groupId, Long userId)
+        + void deleteGroup(Long id)
+        + Group updateGroup(Long id, Group groupData)
+        + boolean isUserMemberOfGroup(Long userId, Long groupId)
+        + List<Group> findPublicGroups()
+    }
+
+    class UserService {
+        - UserRepository userRepository
+        - PasswordEncoder passwordEncoder
+        --
+        + UserService(UserRepository userRepository, PasswordEncoder passwordEncoder)
+        + User saveUser(User user)
+        + User findById(Long id)
+        + User findByUsername(String username)
+        + User findByEmail(String email)
+        + boolean existsByUsername(String username)
+        + boolean existsByEmail(String email)
+        + User updateUser(Long id, User userData)
+        + void deleteUser(Long id)
+        + boolean validatePassword(String rawPassword, String encodedPassword)
+        + User updateLastLogin(Long userId)
+        + List<User> findActiveUsers()
+    }
+
+    class ValidationAndPasswordService {
+        - PasswordEncoder passwordEncoder
+        --
+        + ValidationAndPasswordService(PasswordEncoder passwordEncoder)
+        + boolean isValidEmail(String email)
+        + boolean isValidUsername(String username)
+        + boolean isValidPassword(String password)
+        + String encodePassword(String rawPassword)
+        + boolean matches(String rawPassword, String encodedPassword)
+        + String generateRandomPassword()
+        + boolean isPasswordStrong(String password)
+        + ValidationResult validateUserRegistration(UserRegistrationDTO dto)
+    }
+
+    class EmailRegistrationService {
+        - JavaMailSender mailSender
+        - UserRepository userRepository
+        --
+        + EmailRegistrationService(JavaMailSender mailSender, UserRepository userRepository)
+        + void sendVerificationEmail(String email, String token)
+        + boolean verifyEmailToken(String token)
+        + void sendPasswordResetEmail(String email, String resetToken)
+        + String generateVerificationToken(String email)
+        + void sendWelcomeEmail(String email, String username)
+    }
 }
 
-' קשרים עיקריים בין ישויות
-User "1" o-- "*" Message : sends >
-Group "1" o-- "*" Message : contains >
-Group "1" o-- "*" User : members >
+' Repositories Package
+package "Repositories" {
+    interface MessageRepository {
+        + List<Message> findByGroupId(Long groupId)
+        + List<Message> findBySenderIdAndIsReadFalse(Long senderId)
+        + List<Message> findByTimestampBetween(LocalDateTime start, LocalDateTime end)
+        + List<Message> findByGroupIdOrderByTimestampDesc(Long groupId)
+        + void deleteByGroupId(Long groupId)
+        + Long countByGroupIdAndIsReadFalse(Long groupId)
+    }
 
-' שירותים משתמשים ברפוזיטוריז
-UserService --> UserRepository
-GroupService --> GroupRepository
-MessageService --> MessageRepository
+    interface GroupRepository {
+        + List<Group> findByOwnerId(Long ownerId)
+        + List<Group> findByMembersContaining(User user)
+        + List<Group> findByIsPrivateFalse()
+        + List<Group> findByNameContainingIgnoreCase(String name)
+        + boolean existsByName(String name)
+        + List<Group> findByCreatedAtAfter(LocalDateTime date)
+    }
+
+    interface UserRepository {
+        + Optional<User> findByUsername(String username)
+        + Optional<User> findByEmail(String email)
+        + boolean existsByUsername(String username)
+        + boolean existsByEmail(String email)
+        + List<User> findByIsActiveTrue()
+        + List<User> findByLastLoginAfter(LocalDateTime date)
+        + List<User> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end)
+    }
+}
+
+' Security Package
+package "Security" {
+    class GlobalExceptionHandler {
+        --
+        + ResponseEntity<ErrorResponse> handleValidationException(ValidationException ex)
+        + ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException ex)
+        + ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex)
+        + ResponseEntity<ErrorResponse> handleEntityNotFoundException(EntityNotFoundException ex)
+        + ResponseEntity<ErrorResponse> handleGenericException(Exception ex)
+        + ResponseEntity<ErrorResponse> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex)
+    }
+
+    class JWTService {
+        - String secretKey
+        - long jwtExpiration
+        --
+        + JWTService()
+        + String generateToken(UserDetails userDetails)
+        + String generateToken(Map<String, Object> extraClaims, UserDetails userDetails)
+        + boolean isTokenValid(String token, UserDetails userDetails)
+        + String extractUsername(String token)
+        + Date extractExpiration(String token)
+        + <T> T extractClaim(String token, Function<Claims, T> claimsResolver)
+        + Claims extractAllClaims(String token)
+        + boolean isTokenExpired(String token)
+        + String refreshToken(String token)
+    }
+}
+
+' Relationships
+User ||--o{ Message : sends
+Group ||--o{ Message : contains
+User }o--o{ Group : member_of
+Group }o--|| User : owned_by
+Message ||--|| MessageType : has_type
+
+' Service Dependencies
+HomePage --> UserService
+HomePage --> GroupService
+HomePage --> MessageService
+ChatPage --> MessageService
+ChatPage --> GroupService
+ChatPage --> UserService
+LoginPage --> UserService
+LoginPage --> JWTService
+SignupPage --> UserService
+SignupPage --> ValidationAndPasswordService
+SignupPage --> EmailRegistrationService
+LogoutPage --> JWTService
+LogoutPage --> UserService
+
 ChatService --> MessageService
 ChatService --> GroupService
 ChatService --> UserService
-ChatService --> EncryptionService
-EncryptionService --> Aes256
-EncryptionService --> Base64FileHandler
-DigitalSignatureService --> EncryptionService
-ECDHService --> EncryptionService
+MessageService --> MessageRepository
+MessageService --> UserRepository
+MessageService --> GroupRepository
+GroupService --> GroupRepository
+GroupService --> UserRepository
+UserService --> UserRepository
+ValidationAndPasswordService --> PasswordEncoder
+EmailRegistrationService --> UserRepository
 
-' דפי מערכת משתמשים בשירותים
-ChatPage --> ChatService
-HomePage --> UserService
-LoginPage --> UserService
-SignupPage --> UserService
-LogoutPage --> UserService
+' Repository extends JpaRepository
+MessageRepository --|> JpaRepository
+GroupRepository --|> JpaRepository
+UserRepository --|> JpaRepository
 
 @enduml
