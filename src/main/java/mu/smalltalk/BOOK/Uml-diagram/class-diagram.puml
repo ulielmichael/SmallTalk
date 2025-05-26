@@ -1,0 +1,65 @@
+@startuml
+
+package "entities" {
+    class User
+    class Group
+    class Message
+}
+
+package "Pages" {
+    class ChatPage
+    class HomePage
+    class LoginPage
+    class LogoutPage
+    class SignupPage
+}
+
+package "Repositories" {
+    class UserRepository
+    class GroupRepository
+    class MessageRepository
+}
+
+package "security" {
+    class Aes256
+    class Base64FileHandler
+}
+
+package "Services" {
+    class ChatService
+    class DigitalSignatureService
+    class ECDHService
+    class EncryptionService
+    class GlobalMessageBroadcaster
+    class GroupService
+    class MessageService
+    class MongoDbService
+    class UserService
+}
+
+' קשרים עיקריים בין ישויות
+User "1" o-- "*" Message : sends >
+Group "1" o-- "*" Message : contains >
+Group "1" o-- "*" User : members >
+
+' שירותים משתמשים ברפוזיטוריז
+UserService --> UserRepository
+GroupService --> GroupRepository
+MessageService --> MessageRepository
+ChatService --> MessageService
+ChatService --> GroupService
+ChatService --> UserService
+ChatService --> EncryptionService
+EncryptionService --> Aes256
+EncryptionService --> Base64FileHandler
+DigitalSignatureService --> EncryptionService
+ECDHService --> EncryptionService
+
+' דפי מערכת משתמשים בשירותים
+ChatPage --> ChatService
+HomePage --> UserService
+LoginPage --> UserService
+SignupPage --> UserService
+LogoutPage --> UserService
+
+@enduml

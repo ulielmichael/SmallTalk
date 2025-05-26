@@ -12,12 +12,16 @@ rectangle SmallTalk {
   User --> (send messege encrypt)
   User --> (recive messege decrypt)
   User --> ( HistoryChat )
+  User --> ( Group )
+
 
   ' פעולות מנהל מערכת
   Admin --> (Login)
   Admin --> (HistoryChat)
   Admin --> (mangment users)
   Admin --> (Manage system settings)
+  Admin --> (Manage Groups)
+
 
 
 }
