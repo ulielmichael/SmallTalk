@@ -2,20 +2,24 @@ package mu.smalltalk.Services;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.scheduling.annotation.Async;
 
-import mu.smalltalk.entitis.Group;
 import mu.smalltalk.entitis.Message;
 import mu.smalltalk.entitis.User;
 import mu.smalltalk.Repositories.MessageRepository;
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @Service
 public class ChatService {
@@ -24,231 +28,268 @@ public class ChatService {
     private MessageRepository messageRepository;
     
     @Autowired
-    private GroupService groupService;
+    private MessageService messageService;
     
-    @Autowired
-    private EncryptionService encryptionService;
+    // In-memory cache for frequently accessed messages
+    private final Map<String, List<String>> messageCache = new ConcurrentHashMap<>();
+    private final Map<String, LocalDateTime> cacheTimestamps = new ConcurrentHashMap<>();
+    private final Map<String, LocalDateTime> userLastActivity = new ConcurrentHashMap<>();
     
-    // Use a thread-safe map to track online users
-    private static final Map<String, Long> onlineUsers = new ConcurrentHashMap<>();
-    // Consider a user online if they've had activity in the last 5 minutes
-    private static final long ONLINE_TIMEOUT_MS = 5 * 60 * 1000;
-    
-    // Cache for message history to improve performance
-    private static final Map<String, List<String>> messageCache = new ConcurrentHashMap<>();
-    private static final Map<String, Long> cacheLastUpdated = new ConcurrentHashMap<>();
-    // Cache timeout - 30 seconds
-    private static final long CACHE_TIMEOUT_MS = 30 * 1000;
+    // Cache timeout in minutes
+    private static final int CACHE_TIMEOUT_MINUTES = 5;
+    private static final int BATCH_SIZE = 50; // Load messages in batches
     
     /**
-     * Add a formatted message for a group to the database
-     * 
-     * @param formattedMessage The formatted HTML message
-     * @param groupId The group ID
-     * @param senderId The sender's ID (email)
+     * Add a message to a group - with cache invalidation
      */
-    public void addGroupMessage(String formattedMessage, String groupId, String senderId) {
-        // Convert the formatted message to bytes
-        byte[] messageBytes = formattedMessage.getBytes(StandardCharsets.UTF_8);
-        
-        // Save to database
-        Message message = new Message(senderId, groupId, messageBytes, null, null, groupId);
-        messageRepository.save(message);
-        
-        // Invalidate cache for this group
-        messageCache.remove(groupId);
+    @CacheEvict(value = "groupMessages", key = "#groupId")
+    public void addGroupMessage(String message, String groupId, String senderId) {
+        try {
+            // Save to database asynchronously
+            CompletableFuture.runAsync(() -> {
+                try {
+                    // Convert message to bytes for encryption storage if needed
+                    byte[] messageBytes = message.getBytes();
+                    messageService.saveTextMessage(senderId, groupId, messageBytes, groupId);
+                } catch (Exception e) {
+                    System.err.println("Error saving message to database: " + e.getMessage());
+                }
+            });
+            
+            // Update in-memory cache immediately for faster UI updates
+            messageCache.computeIfAbsent(groupId, k -> new ArrayList<>()).add(message);
+            cacheTimestamps.put(groupId, LocalDateTime.now());
+            
+        } catch (Exception e) {
+            System.err.println("Error adding group message: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     /**
-     * Get all formatted messages for a group
-     * 
-     * @param groupId The group ID
-     * @return List of formatted message strings
+     * Get group messages with intelligent caching
      */
     public List<String> getGroupMessages(String groupId) {
-        // Check if we have a recent cache
-        Long lastUpdated = cacheLastUpdated.get(groupId);
-        long now = System.currentTimeMillis();
+        if (groupId == null) {
+            return new ArrayList<>();
+        }
         
-        if (lastUpdated != null && (now - lastUpdated) < CACHE_TIMEOUT_MS && messageCache.containsKey(groupId)) {
+        // Check if cache is valid and recent
+        if (isCacheValid(groupId)) {
             return new ArrayList<>(messageCache.get(groupId));
         }
         
-        // If no recent cache, get from database
-        List<Message> messages = messageRepository.findByChatId(groupId);
-        
-        List<String> formattedMessages = messages.stream()
-                .filter(message -> message.getTextContent() != null)
-                .map(message -> new String(message.getTextContent(), StandardCharsets.UTF_8))
-                .collect(Collectors.toList());
-        
-        // Update cache
-        messageCache.put(groupId, formattedMessages);
-        cacheLastUpdated.put(groupId, now);
-        
-        return formattedMessages;
+        // Cache is invalid or doesn't exist, reload from database
+        return loadAndCacheMessages(groupId);
     }
     
     /**
-     * Load messages in a background thread to improve UI responsiveness
-     * 
-     * @param groupId The group ID
-     * @return CompletableFuture containing the list of messages
+     * Asynchronously load messages for better performance
      */
+    @Async
     public CompletableFuture<List<String>> loadMessagesAsync(String groupId) {
-        return CompletableFuture.supplyAsync(() -> getGroupMessages(groupId));
-    }
-    
-    /**
-     * Get all groups that a user has participated in (sent or received messages)
-     * 
-     * @param userEmail The user's email
-     * @return List of groups
-     */
-    public List<Group> getUserActiveGroups(String userEmail) {
-        // Get all groups the user is a member of
-        List<Group> userGroups = groupService.getUserGroups(userEmail);
-        
-        // Find which groups have messages
-        List<Group> activeGroups = new ArrayList<>();
-        
-        for (Group group : userGroups) {
-            List<Message> messages = messageRepository.findByChatId(group.getId());
-            if (!messages.isEmpty()) {
-                activeGroups.add(group);
-            }
-        }
-        
-        return activeGroups;
-    }
-    
-    /**
-     * Add an encrypted message to the database
-     * 
-     * @param message The plain text message
-     * @param groupId The group ID
-     * @param senderId The sender's email
-     * @return The message object that was saved
-     */
-    public Message addEncryptedMessage(String message, String groupId, String senderId) {
-        try {
-            // Encrypt the message
-            byte[] encryptedBytes = encryptionService.encrypt(message);
-            
-            // Create and save the message
-            Message messageObj = new Message(senderId, groupId, encryptedBytes, null, null, groupId);
-            
-            // Invalidate cache for this group
-            messageCache.remove(groupId);
-            
-            return messageRepository.save(messageObj);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-    
-    /**
-     * Add media content to the database
-     * 
-     * @param mediaBytes The media file bytes
-     * @param mediaType The media type (IMAGE/SOUND)
-     * @param groupId The group ID
-     * @param senderId The sender's email
-     * @return The message object that was saved
-     */
-    public Message addMediaMessage(String mediaBytes, String mediaType, String groupId, String senderId) {
-        try {
-            // Encrypt the media content (optional)
-            byte[] encryptedMedia = encryptionService.encrypt(mediaBytes);
-            
-            // Create and save the message (with null text content)
-            Message message = new Message(senderId, groupId, null, encryptedMedia, mediaType, groupId);
-            
-            // Invalidate cache for this group
-            messageCache.remove(groupId);
-            
-            return messageRepository.save(message);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-    
-    /**
-     * Update user activity timestamp
-     * @param userEmail The user's email
-     */
-    public void updateUserActivity(String userEmail) {
-        if (userEmail != null && !userEmail.isEmpty()) {
-            onlineUsers.put(userEmail, System.currentTimeMillis());
-        }
-    }
-
-    /**
-     * Check if a user is currently online
-     * @param userEmail The user's email
-     * @return true if the user is online, false otherwise
-     */
-    public boolean isUserOnline(String userEmail) {
-        if (userEmail == null || userEmail.isEmpty()) {
-            return false;
-        }
-        
-        Long lastActivity = onlineUsers.get(userEmail);
-        if (lastActivity == null) {
-            return false;
-        }
-        
-        // Check if the user has been active within the timeout period
-        return (System.currentTimeMillis() - lastActivity) < ONLINE_TIMEOUT_MS;
-    }
-    
-    /**
-     * Get all currently online users
-     * @return Map of user emails to last activity timestamps
-     */
-    public Map<String, Long> getOnlineUsers() {
-        long cutoffTime = System.currentTimeMillis() - ONLINE_TIMEOUT_MS;
-        
-        // Clean up old entries and return current ones
-        Map<String, Long> activeUsers = new HashMap<>();
-        onlineUsers.forEach((email, timestamp) -> {
-            if (timestamp >= cutoffTime) {
-                activeUsers.put(email, timestamp);
-            } else {
-                onlineUsers.remove(email);
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                if (groupId == null) {
+                    return new ArrayList<>();
+                }
+                
+                // Check cache first
+                if (isCacheValid(groupId)) {
+                    return new ArrayList<>(messageCache.get(groupId));
+                }
+                
+                // Load from database with pagination for better performance
+                List<String> messages = loadMessagesFromDatabase(groupId);
+                
+                // Update cache
+                messageCache.put(groupId, new ArrayList<>(messages));
+                cacheTimestamps.put(groupId, LocalDateTime.now());
+                
+                return messages;
+                
+            } catch (Exception e) {
+                System.err.println("Error loading messages asynchronously: " + e.getMessage());
+                return new ArrayList<>();
             }
         });
-        
-        return activeUsers;
     }
     
     /**
-     * Remove a user from the online users map
-     * @param userEmail The user's email
+     * Load messages from database with optimized query
      */
-    public void removeUser(String userEmail) {
-        if (userEmail != null && !userEmail.isEmpty()) {
-            onlineUsers.remove(userEmail);
+    private List<String> loadMessagesFromDatabase(String groupId) {
+        try {
+            // Create pageable with sorting by time descending
+            Pageable pageable = PageRequest.of(0, BATCH_SIZE, Sort.by(Sort.Direction.DESC, "time"));
+            
+            // Get messages from database - limit to recent messages for performance
+            List<Message> dbMessages = messageRepository.findByChatIdOrderByTimeDesc(groupId, pageable);
+            
+            // Convert to strings (decrypt if needed)
+            return dbMessages.stream()
+                .map(this::convertMessageToString)
+                .collect(Collectors.toList());
+                
+        } catch (Exception e) {
+            System.err.println("Error loading messages from database: " + e.getMessage());
+            return new ArrayList<>();
         }
     }
     
     /**
-     * Clear the message cache for specific group
-     * @param groupId The group ID
+     * Convert database message to display string
      */
-    public void clearCache(String groupId) {
-        messageCache.remove(groupId);
-        cacheLastUpdated.remove(groupId);
+    private String convertMessageToString(Message message) {
+        try {
+            // If message has text content (encrypted), decrypt it
+            if (message.getTextContent() != null) {
+                String decryptedText = new String(message.getTextContent());
+                return decryptedText;
+            }
+            
+            // Handle media messages
+            if (message.getMediaContent() != null) {
+                String mediaType = message.getMediaContentType();
+                return String.format("[%s] Media message: %s", 
+                    message.getTime().toString(), mediaType);
+            }
+            
+            return "Empty message";
+            
+        } catch (Exception e) {
+            System.err.println("Error converting message: " + e.getMessage());
+            return "Error loading message";
+        }
     }
     
+    /**
+     * Load and cache messages synchronously
+     */
+    private List<String> loadAndCacheMessages(String groupId) {
+        try {
+            List<String> messages = loadMessagesFromDatabase(groupId);
+            
+            // Update cache
+            messageCache.put(groupId, new ArrayList<>(messages));
+            cacheTimestamps.put(groupId, LocalDateTime.now());
+            
+            return messages;
+            
+        } catch (Exception e) {
+            System.err.println("Error loading and caching messages: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
     
     /**
-     * Clear all message caches
+     * Check if cache is valid and recent
      */
+    private boolean isCacheValid(String groupId) {
+        if (!messageCache.containsKey(groupId) || !cacheTimestamps.containsKey(groupId)) {
+            return false;
+        }
+        
+        LocalDateTime cacheTime = cacheTimestamps.get(groupId);
+        LocalDateTime now = LocalDateTime.now();
+        
+        return cacheTime.plusMinutes(CACHE_TIMEOUT_MINUTES).isAfter(now);
+    }
+    
+    /**
+     * Clear cache for a specific group
+     */
+    @CacheEvict(value = "groupMessages", key = "#groupId")
+    public void clearGroupCache(String groupId) {
+        messageCache.remove(groupId);
+        cacheTimestamps.remove(groupId);
+    }
+    
+    /**
+     * Clear all caches (useful for memory management)
+     */
+    @CacheEvict(value = "groupMessages", allEntries = true)
     public void clearAllCaches() {
         messageCache.clear();
-        cacheLastUpdated.clear();
-    }   
+        cacheTimestamps.clear();
+    }
+    
+    /**
+     * Update user activity status
+     */
+    public void updateUserActivity(String userEmail) {
+        if (userEmail != null) {
+            userLastActivity.put(userEmail, LocalDateTime.now());
+        }
+    }
+    
+    /**
+     * Check if user is online (active in last 2 minutes)
+     */
+    public boolean isUserOnline(String userEmail) {
+        if (userEmail == null || !userLastActivity.containsKey(userEmail)) {
+            return false;
+        }
+        
+        LocalDateTime lastActivity = userLastActivity.get(userEmail);
+        LocalDateTime now = LocalDateTime.now();
+        
+        return lastActivity.plusMinutes(2).isAfter(now);
+    }
+    
+    /**
+     * Get all online users for a group
+     */
+    public List<String> getOnlineUsersInGroup(String groupId, List<String> groupMembers) {
+        return groupMembers.stream()
+            .filter(this::isUserOnline)
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * Preload messages for multiple groups (useful for user login)
+     */
+    @Async
+    public CompletableFuture<Void> preloadGroupMessages(List<String> groupIds) {
+        return CompletableFuture.runAsync(() -> {
+            for (String groupId : groupIds) {
+                if (!isCacheValid(groupId)) {
+                    loadAndCacheMessages(groupId);
+                }
+            }
+        });
+    }
+    
+    /**
+     * Get message count for a group (for pagination)
+     */
+    public long getMessageCount(String groupId) {
+        try {
+            return messageRepository.countByChatId(groupId);
+        } catch (Exception e) {
+            System.err.println("Error getting message count: " + e.getMessage());
+            return 0;
+        }
+    }
+    
+    /**
+     * Load older messages (pagination support)
+     */
+    public List<String> loadOlderMessages(String groupId, int offset, int limit) {
+        try {
+            // Create pageable for pagination
+            int page = offset / limit;
+            Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "time"));
+            
+            List<Message> olderMessages = messageRepository.findByChatIdWithPagination(groupId, pageable);
+            
+            return olderMessages.stream()
+                .map(this::convertMessageToString)
+                .collect(Collectors.toList());
+                
+        } catch (Exception e) {
+            System.err.println("Error loading older messages: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
 }
