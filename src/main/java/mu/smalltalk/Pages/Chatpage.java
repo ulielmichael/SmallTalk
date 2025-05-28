@@ -59,7 +59,7 @@ import mu.smalltalk.Repositories.MessageRepository;
 import mu.smalltalk.security.Aes256;
 
 @Route("chat")
-public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
+public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
 
     @Autowired
     private MessageRepository messageRepository;
@@ -92,7 +92,7 @@ public class ChatPage extends VerticalLayout implements BeforeEnterObserver {
     private Div loadingMessageDiv;
 
     @Autowired  // הוספה של autowired לבנאי כדי להבטיח שהתלויות יוזרקו כראוי
-    public ChatPage(ChatService chatService) {  // להזריק את chatService בבנאי במקום להסתמך על הזרקה בשדה
+    public Chatpage(ChatService chatService) {  // להזריק את chatService בבנאי במקום להסתמך על הזרקה בשדה
         this.chatService = chatService;  // שמירת ההפניה לשירות
         
         aes = initializeEncryption();
