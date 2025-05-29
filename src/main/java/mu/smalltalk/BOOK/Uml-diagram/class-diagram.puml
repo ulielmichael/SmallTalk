@@ -1,113 +1,26 @@
-@startuml Chat Application Class Diagram
-
-!theme plain
-skinparam {
-    packageStyle rectangle
-    defaultFontSize 18
-    defaultFontName Arial
-    class {
-        BackgroundColor LightBlue
-        BorderColor Black
-        FontSize 18
-        FontName Arial
-        FontStyle bold
-    }
-    package {
-        BackgroundColor Cyan
-        BorderColor Black
-        FontSize 24
-        FontName Arial
-        FontStyle bold
-    }
-    arrow {
-        FontSize 16
-        FontName Arial
-        FontStyle bold
-    }
-    note {
-        FontSize 16
-        FontName Arial
-    }
+@startuml
+class UserService {
+  - {static} userRepository : UserRepository
+  - passwordEncoder : BCryptPasswordEncoder
+  + {static} USER_KEY : String
+  + {static} USERNAME_KEY : String
+  
+  + UserService(UserRepository userRepository)
+  + {static} isUserAuthenticated() : boolean
+  + {static} getAuthenticatedUser() : User
+  + {static} clearAuthenticatedUser() : void
+  + registerUser(String fullName, String email, String password) : User
+  + authenticateUser(String email, String password) : User
+  + getCurrentUser() : User
+  + logout() : void
+  + updateProfilePicture(User user) : void
+  + updateProfilePicture(String userId, String profilePicData) : void
+  + updateProfilePictureByEmail(String email, String profilePicData) : void
+  + {static} getUserById(String email) : User
+  + {static} getUserByEmail(String email) : User
+  + deleteUserByEmail(String email) : void
+  + {static} getAllUsers() : List<User>
 }
 
-package "Entities" {
-    class Group
-    class Message
-    class User
-}
-
-package "Entities" {
-    class Group
-    class Message
-    class User
-}
-
-package "Pages" {
-    class ChatPage
-    class HomePage
-    class LoginPage
-    class LogoutPage
-    class SignupPage
-}
-
-package "Security" {
-    class AES256
-    class Base64FileHandler
-}
-
-package "Repositories" {
-    class GroupRepository
-    class MessageRepository
-    class UserRepository
-}
-
-package "Services" {
-    class ChatService
-    class DigitalSignatureService
-    class ECDHService
-    class EncryptionService
-    class GlobalMessageBroadcaster
-    class GroupService
-    class MessageService
-    class MongoDbService
-    class UserService
-}
-
-' Composition relationships (strong ownership)
-ChatService *-- MessageService : contains
-ChatService *-- GroupService : contains
-ChatService *-- GlobalMessageBroadcaster : contains
-UserService *-- EncryptionService : contains
-MessageService *-- DigitalSignatureService : contains
-GroupService *-- ECDHService : contains
-
-' Aggregation relationships (weak ownership)
-SignupPage o-- UserService : uses
-LoginPage o-- UserService : uses
-ChatPage o-- ChatService : uses
-LogoutPage o-- UserService : uses
-HomePage o-- UserService : uses
-
-' Association relationships
-GroupRepository --> Group : manages
-MessageRepository --> Message : manages
-UserRepository --> User : manages
-
-' Relationships between Entities
-User ||--o{ Message : sends
-Group ||--o{ Message : contains
-User }o--o{ Group : member of
-
-' Service Dependencies
-MessageService --> MessageRepository : uses
-GroupService --> GroupRepository : uses
-UserService --> UserRepository : uses
-MongoDbService --> UserRepository : connects
-MongoDbService --> MessageRepository : connects
-MongoDbService --> GroupRepository : connects
-
-' Security Dependencies
-EncryptionService --> AES256 : uses
-EncryptionService --> Base64FileHandler : uses
 
 @enduml
