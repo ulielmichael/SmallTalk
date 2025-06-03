@@ -1,14 +1,51 @@
 package mu.smalltalk.Pages;
 
+import com.vaadin.flow.component.DetachEvent;
+import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.dependency.CssImport;
 import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.Route;
+import org.springframework.beans.factory.annotation.Autowired;
+import mu.smalltalk.Services.QuoteService;
+
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.List;
+import java.util.Arrays;
+import java.util.Random;
 
 @CssImport("./styles/shared-styles.css")
 @Route("/")
 public class HomePage extends VerticalLayout {
+    
+    @Autowired
+    private QuoteService quoteService;
+    
+    private Div quoteContainer;
+    private Timer quoteTimer;
+    private Random random = new Random();
+    
+    // רשימת משפטי חיזוק בעברית
+    private List<String> motivationalQuotes = Arrays.asList(
+        "אתה יכול להשיג כל דבר שאתה שם את המחשבה עליו! 💪",
+        "כל יום הוא הזדמנות חדשה לגדול ולהתפתח! 🌱",
+        "האתגרים הגדולים יוצרים את האנשים הגדולים! ⭐",
+        "אל תפחד מהשינוי - זה המקום שבו קורה הקסם! ✨",
+        "הצלחה היא לא יעד, היא מסע! 🚀",
+        "אתה חזק יותר מכל האתגרים שלפניך! 💎",
+        "כל כישלון הוא צעד אחד קדימה לקראת הצלחה! 🎯",
+        "התחל מהיום - העתיד שלך מתחיל עכשיו! 🌟",
+        "אתה הכותב של הסיפור של החיים שלך! 📖",
+        "תאמין בעצמך - זה הצעד הראשון לכל הצלחה! 🏆",
+        "החלומות שלך לא יגיעו עם תאריך תפוגה! 🌈",
+        "אתה יכול לעשות דברים מדהימים! 🎨",
+        "כל רגע הוא התחלה חדשה! ⏰",
+        "אתה בדיוק במקום הנכון בזמן הנכון! 🎪",
+        "הדרך הטובה ביותר לחזות את העתיד היא ליצור אותו! 🔮"
+    );
     
     public HomePage() {
         // Set basic page properties
@@ -19,23 +56,20 @@ public class HomePage extends VerticalLayout {
         setSizeFull();
         getStyle().set("background-color", "#f5f7fa");
         
-        // Navigation bar
-        HorizontalLayout navbar = createNavigationBar();
+        // Navigation bar עם משפט
+        HorizontalLayout navbar = createNavigationBarWithQuote();
         
         // Hero section
         Div heroSection = createHeroSection();
         
         // Features section
         Div featuresSection = createFeaturesSection();
-        Div ChatSection = createFeaturesSection();
         
         // Security section
         Div securitySection = createSecuritySection();
         
         // Technology section
         Div technologySection = createTechnologySection();
-
-        // Div LoginSection = createloginSection();
         
         // Footer
         Div footer = createFooter();
@@ -44,82 +78,211 @@ public class HomePage extends VerticalLayout {
         add(navbar, heroSection, featuresSection, securitySection, technologySection, footer);
     }
     
+    private HorizontalLayout createNavigationBarWithQuote() {
+        HorizontalLayout navbar = new HorizontalLayout();
+        navbar.setWidthFull();
+        navbar.setHeight("80px");
+        navbar.setJustifyContentMode(JustifyContentMode.BETWEEN);
+        navbar.setAlignItems(Alignment.CENTER);
+        navbar.getStyle()
+            .set("background-color", "#ffffff")
+            .set("padding", "0 24px")
+            .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)")
+            .set("position", "sticky")
+            .set("top", "0")
+            .set("z-index", "1000");
+        
+        // חלק שמאל - לוגו + משפט חיזוק
+        HorizontalLayout leftSection = new HorizontalLayout();
+        leftSection.setAlignItems(Alignment.CENTER);
+        leftSection.setSpacing(true);
+        leftSection.setWidthFull();
+        leftSection.setFlexGrow(1);
+        
+        // לוגו עם טקסט
+        HorizontalLayout logoContainer = new HorizontalLayout();
+        logoContainer.setAlignItems(Alignment.CENTER);
+        logoContainer.setSpacing(true);
+        logoContainer.getStyle().set("cursor", "pointer");
+        
+        // תמונת הלוגו
+        Image logo = new Image("images/live-chat.png", "SmallTalk");
+        logo.setHeight("40px");
+        logo.setWidth("auto");
+        
+        // טקסט הלוגו
+        H3 logoText = new H3("SmallTalk");
+        logoText.getStyle()
+            .set("margin", "0")
+            .set("color", "#2a5885")
+            .set("font-weight", "bold")
+            .set("font-size", "22px");
+        
+        logoContainer.add(logo, logoText);
+        logoContainer.addClickListener(e -> logoContainer.getUI().ifPresent(ui -> ui.navigate("")));
+        
+        // מיכל למשפט חיזוק
+        quoteContainer = new Div();
+        quoteContainer.getStyle()
+            .set("margin-left", "40px")
+            .set("padding", "8px 16px")
+            .set("background-color", "#f0f8ff")
+            .set("border-radius", "8px")
+            .set("border-left", "3px solid #2a5885")
+            .set("max-width", "400px")
+            .set("font-size", "14px")
+            .set("line-height", "1.4")
+            .set("transition", "all 0.3s ease");
+        
+        // טעינת משפט ראשוני
+        loadNewQuote();
+        
+        // כפתור רענון מעוצב
+        Button refreshButton = new Button("🔄");
+        refreshButton.getStyle()
+            .set("background-color", "#2a5885")
+            .set("color", "white")
+            .set("border", "none")
+            .set("cursor", "pointer")
+            .set("padding", "8px 12px")
+            .set("margin-left", "12px")
+            .set("border-radius", "6px")
+            .set("font-size", "16px")
+            .set("transition", "all 0.3s ease")
+            .set("box-shadow", "0 2px 4px rgba(42, 88, 133, 0.3)");
+        
+        refreshButton.addClickListener(e -> {
+            // אפקט חזותי של טעינה
+            refreshButton.setText("⏳");
+            loadNewQuote();
+            // החזרת האייקון אחרי זמן קצר
+            getUI().ifPresent(ui -> {
+                Timer timer = new Timer();
+                timer.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        ui.access(() -> refreshButton.setText("🔄"));
+                    }
+                }, 500);
+            });
+        });
+        
+        leftSection.add(logoContainer, quoteContainer, refreshButton);
+        
+        // חלק ימין - תפריט ניווט
+        HorizontalLayout navLinks = new HorizontalLayout();
+        navLinks.setSpacing(true);
+        navLinks.setAlignItems(Alignment.CENTER);
+        
+        Anchor homeLink = new Anchor("#", "Home");
+        homeLink.getStyle().set("font-weight", "bold");
 
-private HorizontalLayout createNavigationBar() {
-    HorizontalLayout navbar = new HorizontalLayout();
-    navbar.setWidthFull();
-    navbar.setHeight("64px");
-    navbar.setJustifyContentMode(JustifyContentMode.BETWEEN);
-    navbar.setAlignItems(Alignment.CENTER);
-    navbar.getStyle()
-        .set("background-color", "#ffffff")
-        .set("padding", "0 24px")
-        .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)")
-        .set("position", "sticky")
-        .set("top", "0")
-        .set("z-index", "1000");
+        Anchor chatlink = new Anchor("chat", "Chat");
+        Anchor loginLink = new Anchor("login", "Login");
+        Anchor logoutLink = new Anchor("logout", "Logout");
+        Anchor signupLink = new Anchor("signup", "Signup");
+        Anchor featuresLink = new Anchor("#features", "Features");
+        Anchor securityLink = new Anchor("#security", "Security");
+        Anchor techLink = new Anchor("#technology", "Technology");
+        Anchor aboutLink = new Anchor("#about", "About");
+        
+        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, logoutLink, signupLink);
+        
+        // Style all links
+        for (int i = 0; i < navLinks.getComponentCount(); i++) {
+            com.vaadin.flow.component.Component component = navLinks.getComponentAt(i);
+            if (component instanceof Anchor) {
+                ((Anchor) component).getStyle()
+                    .set("color", "#444")
+                    .set("text-decoration", "none")
+                    .set("margin", "0 8px")
+                    .set("padding", "6px 12px")
+                    .set("border-radius", "4px")
+                    .set("transition", "background-color 0.3s")
+                    .set("white-space", "nowrap");
+            }
+        }
+        
+        navbar.add(leftSection, navLinks);
+        
+        // הגדרת טיימר לעדכון משפט כל 10 דקות
+        setupAutoRefresh();
+        
+        return navbar;
+    }
     
-    // לוגו עם טקסט - יצירת מיכל אופקי עבור הלוגו והטקסט
-    HorizontalLayout logoContainer = new HorizontalLayout();
-    logoContainer.setAlignItems(Alignment.CENTER);
-    logoContainer.setSpacing(true);
-    logoContainer.getStyle().set("cursor", "pointer");
-    
-    // תמונת הלוגו
-    Image logo = new Image("images/live-chat.png", "SmallTalk");
-    logo.setHeight("40px");
-    logo.setWidth("auto");
-    
-    // טקסט הלוגו
-    H3 logoText = new H3("SmallTalk");
-    logoText.getStyle()
-        .set("margin", "0")
-        .set("color", "#2a5885")
-        .set("font-weight", "bold")
-        .set("font-size", "22px");
-    
-    // הוספת הלוגו והטקסט למיכל
-    logoContainer.add(logo, logoText);
-    
-    // הוספת קליק לחזרה לעמוד הבית
-    logoContainer.addClickListener(e -> logoContainer.getUI().ifPresent(ui -> ui.navigate("")));
-    
-    // Navigation links
-    HorizontalLayout navLinks = new HorizontalLayout();
-    navLinks.setSpacing(true);
-    
-    Anchor homeLink = new Anchor("#", "Home");
-    homeLink.getStyle().set("font-weight", "bold");
-
-    Anchor chatlink = new Anchor("chat", "Chat");
-    Anchor loginLink = new Anchor("login", "Login");
-    Anchor logoutLink = new Anchor("logout", "Logout");
-    Anchor signupLink = new Anchor("signup", "Signup");
-    Anchor featuresLink = new Anchor("#features", "Features");
-    Anchor securityLink = new Anchor("#security", "Security");
-    Anchor techLink = new Anchor("#technology", "Technology");
-    Anchor aboutLink = new Anchor("#about", "About");
-    
-    navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, logoutLink, signupLink);
-    
-    // Style all links
-    for (int i = 0; i < navLinks.getComponentCount(); i++) {
-        com.vaadin.flow.component.Component component = navLinks.getComponentAt(i);
-        if (component instanceof Anchor) {
-            ((Anchor) component).getStyle()
-                .set("color", "#444")
-                .set("text-decoration", "none")
-                .set("margin", "0 12px")
-                .set("padding", "6px 12px")
-                .set("border-radius", "4px")
-                .set("transition", "background-color 0.3s");
+    private void loadNewQuote() {
+        if (quoteContainer == null) return;
+        
+        try {
+            String selectedQuote;
+            
+            // ניסיון לטעון מהשירות, אם יש
+            if (quoteService != null) {
+                try {
+                    QuoteService.Quote serviceQuote = quoteService.getRandomMotivationalQuote();
+                    selectedQuote = "💡 \"" + serviceQuote.getText() + "\" - " + serviceQuote.getAuthor();
+                } catch (Exception e) {
+                    // אם השירות לא זמין, נשתמש ברשימה המקומית
+                    selectedQuote = getRandomLocalQuote();
+                }
+            } else {
+                // אם אין שירות, נשתמש ברשימה המקומית
+                selectedQuote = getRandomLocalQuote();
+            }
+            
+            updateQuoteDisplay(selectedQuote);
+            
+        } catch (Exception e) {
+            // במקרה של שגיאה כללית
+            updateQuoteDisplay("💡 \"כל יום הוא הזדמנות חדשה לגדול!\" 🌱");
         }
     }
     
-    // הוספת מיכל הלוגו (במקום הלוגו לבד) ותפריט הניווט לסרגל
-    navbar.add(logoContainer, navLinks);
-    return navbar;
-}
+    private String getRandomLocalQuote() {
+        int randomIndex = random.nextInt(motivationalQuotes.size());
+        return "💡 " + motivationalQuotes.get(randomIndex);
+    }
+    
+    private void updateQuoteDisplay(String quoteText) {
+        if (quoteContainer == null) return;
+        
+        quoteContainer.removeAll();
+        
+        // קיצור משפט אם הוא ארוך מדי
+        String displayText = quoteText.length() > 80 ? 
+            quoteText.substring(0, 77) + "..." : 
+            quoteText;
+        
+        Div quoteDiv = new Div(displayText);
+        quoteDiv.getStyle()
+            .set("color", "#2a5885")
+            .set("font-weight", "500")
+            .set("margin", "0")
+            .set("animation", "fadeIn 0.5s ease-in");
+        
+        quoteContainer.add(quoteDiv);
+    }
+    
+    private void setupAutoRefresh() {
+        // טיימר שמתעדכן כל 10 דקות (600000 מילישניות)
+        quoteTimer = new Timer();
+        quoteTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                getUI().ifPresent(ui -> ui.access(() -> loadNewQuote()));
+            }
+        }, 600000, 600000); // כל 10 דקות
+    }
+    
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        super.onDetach(detachEvent);
+        // ניקוי הטיימר כשהדף נסגר
+        if (quoteTimer != null) {
+            quoteTimer.cancel();
+        }
+    }
     
     private Div createHeroSection() {
         Div heroSection = new Div();
@@ -139,7 +302,7 @@ private HorizontalLayout createNavigationBar() {
         // Add the logo image between title and subtitle
         Image logoImage = new Image("images/live-chat.png", "SmallTalk ");
         logoImage.setHeight("300px");
-        logoImage.setWidth("3   00px");
+        logoImage.setWidth("300px");
         logoImage.getStyle()
             .set("margin", "20px auto")
             .set("display", "block");

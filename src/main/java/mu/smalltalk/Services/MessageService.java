@@ -1,17 +1,14 @@
 package mu.smalltalk.Services;
 
-
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import mu.smalltalk.entitis.Message;
-import mu.smalltalk.entitis.User;
 import mu.smalltalk.Repositories.MessageRepository;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class MessageService {
@@ -72,7 +69,22 @@ public class MessageService {
         List<Message> receivedMessages = messageRepository.findByReceiverID(userId);
         
         // Combine the lists and extract unique chat IDs
-        return sentMessages.stream()
+        return Stream.concat(sentMessages.stream(), receivedMessages.stream())
+                .map(Message::getChatId)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Alternative method using single query to get user's chat IDs
+     * This is more efficient as it makes only one database call
+     * 
+     * @param userId The user's ID (email)
+     * @return List of unique chat IDs
+     */
+    public List<String> getUserChatIdsOptimized(String userId) {
+        return messageRepository.findBySenderIDOrReceiverID(userId, userId)
+                .stream()
                 .map(Message::getChatId)
                 .distinct()
                 .collect(Collectors.toList());

@@ -1,25 +1,22 @@
 package mu.smalltalk.Services;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.scheduling.annotation.Async;
-
-import mu.smalltalk.entitis.Message;
-import mu.smalltalk.entitis.User;
-import mu.smalltalk.Repositories.MessageRepository;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-import java.util.ArrayList;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import mu.smalltalk.Repositories.MessageRepository;
+import mu.smalltalk.entitis.Message;
 
 @Service
 public class ChatService {
@@ -30,265 +27,380 @@ public class ChatService {
     @Autowired
     private MessageService messageService;
     
-    // In-memory cache for frequently accessed messages
-    private final Map<String, List<String>> messageCache = new ConcurrentHashMap<>();
-    private final Map<String, LocalDateTime> cacheTimestamps = new ConcurrentHashMap<>();
-    private final Map<String, LocalDateTime> userLastActivity = new ConcurrentHashMap<>();
-    
-    // Cache timeout in minutes
-    private static final int CACHE_TIMEOUT_MINUTES = 5;
-    private static final int BATCH_SIZE = 50; // Load messages in batches
+    // הגדרות מותאמות לשיחות גדולות
+    private static final int INITIAL_LOAD_SIZE = 20; // טוען רק 20 הודעות אחרונות בהתחלה
+    private static final int PAGINATION_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 100; // הקטנת הגבול המקסימלי
+    private static final int CACHE_SIZE = 200; // מספר הודעות בקאש
     
     /**
-     * Add a message to a group - with cache invalidation
+     * הוספת הודעה עם אופטימיזציה
      */
-    @CacheEvict(value = "groupMessages", key = "#groupId")
+    @CacheEvict(value = {"groupMessages", "latestMessages"}, key = "#groupId")
     public void addGroupMessage(String message, String groupId, String senderId) {
         try {
-            // Save to database asynchronously
-            CompletableFuture.runAsync(() -> {
-                try {
-                    // Convert message to bytes for encryption storage if needed
-                    byte[] messageBytes = message.getBytes();
-                    messageService.saveTextMessage(senderId, groupId, messageBytes, groupId);
-                } catch (Exception e) {
-                    System.err.println("Error saving message to database: " + e.getMessage());
-                }
-            });
-            
-            // Update in-memory cache immediately for faster UI updates
-            messageCache.computeIfAbsent(groupId, k -> new ArrayList<>()).add(message);
-            cacheTimestamps.put(groupId, LocalDateTime.now());
-            
+            byte[] messageBytes = message.getBytes();
+            messageService.saveTextMessage(senderId, groupId, messageBytes, groupId);
         } catch (Exception e) {
             System.err.println("Error adding group message: " + e.getMessage());
-            e.printStackTrace();
+            throw new RuntimeException("Failed to save message", e);
         }
     }
     
     /**
-     * Get group messages with intelligent caching
+     * טעינה ראשונית מהירה - רק הודעות אחרונות
      */
-    public List<String> getGroupMessages(String groupId) {
-        if (groupId == null) {
+    @Cacheable(value = "latestMessages", key = "#groupId")
+    public List<String> getInitialMessages(String groupId) {
+        if (groupId == null || groupId.trim().isEmpty()) {
             return new ArrayList<>();
         }
         
-        // Check if cache is valid and recent
-        if (isCacheValid(groupId)) {
-            return new ArrayList<>(messageCache.get(groupId));
+        try {
+            // טוען רק הודעות אחרונות עם projection
+            return loadLatestMessagesOptimized(groupId, INITIAL_LOAD_SIZE);
+        } catch (Exception e) {
+            System.err.println("Error loading initial messages: " + e.getMessage());
+            return new ArrayList<>();
         }
-        
-        // Cache is invalid or doesn't exist, reload from database
-        return loadAndCacheMessages(groupId);
     }
     
     /**
-     * Asynchronously load messages for better performance
+     * טעינה מהירה עם projection - טוען רק שדות נחוצים
+     */
+    private List<String> loadLatestMessagesOptimized(String groupId, int limit) {
+        try {
+            Pageable pageable = PageRequest.of(0, limit);
+            
+            // שימוש בקוורי מותאם עם projection
+            List<Message> messages = messageRepository.findByChatIdOrderByTimeDesc(groupId, pageable);
+            
+            if (messages == null || messages.isEmpty()) {
+                return new ArrayList<>();
+            }
+            
+            // המרה מהירה והיפוך סדר
+            List<String> result = messages.stream()
+                    .map(this::convertMessageToStringFast)
+                    .filter(msg -> msg != null && !msg.isEmpty())
+                    .collect(Collectors.toList());
+            
+            java.util.Collections.reverse(result);
+            return result;
+            
+        } catch (Exception e) {
+            System.err.println("Error in optimized message loading: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * המרה מהירה של הודעה לטקסט
+     */
+    private String convertMessageToStringFast(Message message) {
+        if (message == null) {
+            return "";
+        }
+        
+        try {
+            // בדיקה מהירה של תוכן טקסט
+            if (message.getTextContent() != null && message.getTextContent().length > 0) {
+                return new String(message.getTextContent());
+            }
+            
+            // אם יש מדיה - החזרת תיאור קצר
+            if (message.getMediaContent() != null && message.getMediaContent().length > 0) {
+                return "[" + (message.getMediaContentType() != null ? message.getMediaContentType() : "Media") + "]";
+            }
+            
+            return "";
+            
+        } catch (Exception e) {
+            return "";
+        }
+    }
+    
+    /**
+     * טעינת הודעות נוספות עם אופטימיזציה
+     */
+    public List<String> loadMoreMessages(String groupId, int page) {
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        try {
+            // התחלה מדף 1 (דף 0 הוא ההודעות הראשונות)
+            Pageable pageable = PageRequest.of(page, PAGINATION_SIZE);
+            
+            // שימוש בקוורי מותאם
+            List<Message> olderMessages = messageRepository.findByChatIdOrderByTimeAsc(groupId, pageable);
+            
+            if (olderMessages == null || olderMessages.isEmpty()) {
+                return new ArrayList<>();
+            }
+            
+            return olderMessages.stream()
+                    .map(this::convertMessageToStringFast)
+                    .filter(msg -> msg != null && !msg.isEmpty())
+                    .collect(Collectors.toList());
+                    
+        } catch (Exception e) {
+            System.err.println("Error loading more messages: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * טעינה אסינכרונית מהירה
+     */
+    @Async
+    public CompletableFuture<List<String>> loadMoreMessagesAsync(String groupId, int page) {
+        try {
+            List<String> messages = loadMoreMessages(groupId, page);
+            return CompletableFuture.completedFuture(messages);
+        } catch (Exception e) {
+            System.err.println("Error in async message loading: " + e.getMessage());
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
+    }
+    
+    /**
+     * טעינה אסינכרונית בסיסית - לתאימות עם קוד ישן
      */
     @Async
     public CompletableFuture<List<String>> loadMessagesAsync(String groupId) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                if (groupId == null) {
-                    return new ArrayList<>();
-                }
-                
-                // Check cache first
-                if (isCacheValid(groupId)) {
-                    return new ArrayList<>(messageCache.get(groupId));
-                }
-                
-                // Load from database with pagination for better performance
-                List<String> messages = loadMessagesFromDatabase(groupId);
-                
-                // Update cache
-                messageCache.put(groupId, new ArrayList<>(messages));
-                cacheTimestamps.put(groupId, LocalDateTime.now());
-                
-                return messages;
-                
-            } catch (Exception e) {
-                System.err.println("Error loading messages asynchronously: " + e.getMessage());
-                return new ArrayList<>();
-            }
-        });
-    }
-    
-    /**
-     * Load messages from database with optimized query
-     */
-    private List<String> loadMessagesFromDatabase(String groupId) {
         try {
-            // Create pageable with sorting by time descending
-            Pageable pageable = PageRequest.of(0, BATCH_SIZE, Sort.by(Sort.Direction.DESC, "time"));
-            
-            // Get messages from database - limit to recent messages for performance
-            List<Message> dbMessages = messageRepository.findByChatIdOrderByTimeDesc(groupId, pageable);
-            
-            // Convert to strings (decrypt if needed)
-            return dbMessages.stream()
-                .map(this::convertMessageToString)
-                .collect(Collectors.toList());
-                
+            List<String> messages = getInitialMessages(groupId);
+            return CompletableFuture.completedFuture(messages);
         } catch (Exception e) {
-            System.err.println("Error loading messages from database: " + e.getMessage());
-            return new ArrayList<>();
+            System.err.println("Error in async message loading: " + e.getMessage());
+            return CompletableFuture.completedFuture(new ArrayList<>());
         }
     }
     
     /**
-     * Convert database message to display string
-     */
-    private String convertMessageToString(Message message) {
-        try {
-            // If message has text content (encrypted), decrypt it
-            if (message.getTextContent() != null) {
-                String decryptedText = new String(message.getTextContent());
-                return decryptedText;
-            }
-            
-            // Handle media messages
-            if (message.getMediaContent() != null) {
-                String mediaType = message.getMediaContentType();
-                return String.format("[%s] Media message: %s", 
-                    message.getTime().toString(), mediaType);
-            }
-            
-            return "Empty message";
-            
-        } catch (Exception e) {
-            System.err.println("Error converting message: " + e.getMessage());
-            return "Error loading message";
-        }
-    }
-    
-    /**
-     * Load and cache messages synchronously
-     */
-    private List<String> loadAndCacheMessages(String groupId) {
-        try {
-            List<String> messages = loadMessagesFromDatabase(groupId);
-            
-            // Update cache
-            messageCache.put(groupId, new ArrayList<>(messages));
-            cacheTimestamps.put(groupId, LocalDateTime.now());
-            
-            return messages;
-            
-        } catch (Exception e) {
-            System.err.println("Error loading and caching messages: " + e.getMessage());
-            return new ArrayList<>();
-        }
-    }
-    
-    /**
-     * Check if cache is valid and recent
-     */
-    private boolean isCacheValid(String groupId) {
-        if (!messageCache.containsKey(groupId) || !cacheTimestamps.containsKey(groupId)) {
-            return false;
-        }
-        
-        LocalDateTime cacheTime = cacheTimestamps.get(groupId);
-        LocalDateTime now = LocalDateTime.now();
-        
-        return cacheTime.plusMinutes(CACHE_TIMEOUT_MINUTES).isAfter(now);
-    }
-    
-    /**
-     * Clear cache for a specific group
-     */
-    @CacheEvict(value = "groupMessages", key = "#groupId")
-    public void clearGroupCache(String groupId) {
-        messageCache.remove(groupId);
-        cacheTimestamps.remove(groupId);
-    }
-    
-    /**
-     * Clear all caches (useful for memory management)
-     */
-    @CacheEvict(value = "groupMessages", allEntries = true)
-    public void clearAllCaches() {
-        messageCache.clear();
-        cacheTimestamps.clear();
-    }
-    
-    /**
-     * Update user activity status
-     */
-    public void updateUserActivity(String userEmail) {
-        if (userEmail != null) {
-            userLastActivity.put(userEmail, LocalDateTime.now());
-        }
-    }
-    
-    /**
-     * Check if user is online (active in last 2 minutes)
-     */
-    public boolean isUserOnline(String userEmail) {
-        if (userEmail == null || !userLastActivity.containsKey(userEmail)) {
-            return false;
-        }
-        
-        LocalDateTime lastActivity = userLastActivity.get(userEmail);
-        LocalDateTime now = LocalDateTime.now();
-        
-        return lastActivity.plusMinutes(2).isAfter(now);
-    }
-    
-    /**
-     * Get all online users for a group
-     */
-    public List<String> getOnlineUsersInGroup(String groupId, List<String> groupMembers) {
-        return groupMembers.stream()
-            .filter(this::isUserOnline)
-            .collect(Collectors.toList());
-    }
-    
-    /**
-     * Preload messages for multiple groups (useful for user login)
+     * טעינה אסינכרונית עם גודל מותאם אישית
      */
     @Async
-    public CompletableFuture<Void> preloadGroupMessages(List<String> groupIds) {
-        return CompletableFuture.runAsync(() -> {
-            for (String groupId : groupIds) {
-                if (!isCacheValid(groupId)) {
-                    loadAndCacheMessages(groupId);
-                }
-            }
-        });
+    public CompletableFuture<List<String>> loadMessagesAsync(String groupId, int size) {
+        try {
+            List<String> messages = loadLatestMessagesOptimized(groupId, size);
+            return CompletableFuture.completedFuture(messages);
+        } catch (Exception e) {
+            System.err.println("Error in async message loading: " + e.getMessage());
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
     }
     
     /**
-     * Get message count for a group (for pagination)
+     * ספירה מהירה עם קאש
      */
+    @Cacheable(value = "messageCount", key = "#groupId")
     public long getMessageCount(String groupId) {
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return 0;
+        }
+        
         try {
-            return messageRepository.countByChatId(groupId);
+            return messageRepository.countByChatIdOptimized(groupId);
         } catch (Exception e) {
-            System.err.println("Error getting message count: " + e.getMessage());
+            System.err.println("Error counting messages: " + e.getMessage());
             return 0;
         }
     }
     
     /**
-     * Load older messages (pagination support)
+     * טעינת חלק מההודעות לפי טווח זמן
      */
-    public List<String> loadOlderMessages(String groupId, int offset, int limit) {
+    public List<String> getMessagesByTimeRange(String groupId, long startTime, long endTime) {
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
         try {
-            // Create pageable for pagination
-            int page = offset / limit;
-            Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "time"));
+            List<Message> messages = messageRepository.findByChatIdAndTimeRange(groupId, startTime, endTime);
             
-            List<Message> olderMessages = messageRepository.findByChatIdWithPagination(groupId, pageable);
-            
-            return olderMessages.stream()
-                .map(this::convertMessageToString)
-                .collect(Collectors.toList());
-                
+            return messages.stream()
+                    .map(this::convertMessageToStringFast)
+                    .filter(msg -> msg != null && !msg.isEmpty())
+                    .collect(Collectors.toList());
+                    
         } catch (Exception e) {
-            System.err.println("Error loading older messages: " + e.getMessage());
+            System.err.println("Error loading messages by time range: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * טעינה מהירה עם batch processing
+     */
+    public List<String> loadMessagesBatch(String groupId, int batchSize, int batchNumber) {
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        if (batchSize <= 0 || batchSize > MAX_PAGE_SIZE) {
+            batchSize = PAGINATION_SIZE;
+        }
+        
+        try {
+            Pageable pageable = PageRequest.of(batchNumber, batchSize, Sort.by(Sort.Direction.ASC, "time"));
+            
+            List<Message> messages = messageRepository.findByChatIdProjectedSorted(groupId);
+            
+            // לקיחת הבאצ' הרצוי
+            int startIndex = batchNumber * batchSize;
+            int endIndex = Math.min(startIndex + batchSize, messages.size());
+            
+            if (startIndex >= messages.size()) {
+                return new ArrayList<>();
+            }
+            
+            return messages.subList(startIndex, endIndex).stream()
+                    .map(this::convertMessageToStringFast)
+                    .filter(msg -> msg != null && !msg.isEmpty())
+                    .collect(Collectors.toList());
+                    
+        } catch (Exception e) {
+            System.err.println("Error in batch loading: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * ניקוי קאש מותאם
+     */
+    @CacheEvict(value = {"groupMessages", "latestMessages", "messageCount"}, key = "#groupId")
+    public void clearGroupCache(String groupId) {
+        // הקאש ינוקה אוטומטית
+    }
+    
+    /**
+     * ניקוי כל הקאש
+     */
+    @CacheEvict(value = {"groupMessages", "latestMessages", "messageCount"}, allEntries = true)
+    public void clearAllCaches() {
+        // הקאש ינוקה אוטומטית
+    }
+    
+    /**
+     * בדיקה מהירה אם יש הודעות
+     */
+    public boolean hasMessages(String groupId) {
+        return getMessageCount(groupId) > 0;
+    }
+    
+    /**
+     * טעינה חכמה - טוען כמות משתנה לפי גודל השיחה
+     */
+    public List<String> getMessagesAdaptive(String groupId) {
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        try {
+            long totalMessages = getMessageCount(groupId);
+            
+            int loadSize;
+            if (totalMessages < 100) {
+                // שיחה קטנה - טוען הכל
+                loadSize = (int) totalMessages;
+            } else if (totalMessages < 1000) {
+                // שיחה בינונית - טוען 50 אחרונות
+                loadSize = 50;
+            } else {
+                // שיחה גדולה - טוען רק 20 אחרונות
+                loadSize = INITIAL_LOAD_SIZE;
+            }
+            
+            return loadLatestMessagesOptimized(groupId, loadSize);
+            
+        } catch (Exception e) {
+            System.err.println("Error in adaptive loading: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    // ================== מתודות תאימות עם קוד ישן ==================
+    
+    /**
+     * טעינת הודעות סטנדרטית - לתאימות עם קוד ישן
+     */
+    public List<String> getGroupMessages(String groupId) {
+        return getInitialMessages(groupId);
+    }
+    
+    /**
+     * טעינת הודעות עם גודל מותאם - לתאימות עם קוד ישן
+     */
+    public List<String> getGroupMessages(String groupId, int pageSize) {
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        if (pageSize <= 0 || pageSize > MAX_PAGE_SIZE) {
+            pageSize = PAGINATION_SIZE;
+        }
+        
+        try {
+            return loadLatestMessagesOptimized(groupId, pageSize);
+        } catch (Exception e) {
+            System.err.println("Error loading group messages with pagination: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * טעינה אסינכרונית סטנדרטית - לתאימות עם קוד ישן
+     */
+    @Async
+    public CompletableFuture<List<String>> getGroupMessagesAsync(String groupId) {
+        try {
+            List<String> messages = getInitialMessages(groupId);
+            return CompletableFuture.completedFuture(messages);
+        } catch (Exception e) {
+            System.err.println("Error in async message loading: " + e.getMessage());
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
+    }
+    
+    /**
+     * קבלת הודעות אחרונות - לתאימות עם קוד ישן
+     */
+    public List<String> getLatestMessages(String groupId, int count) {
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        if (count <= 0) {
+            count = 10;
+        }
+        
+        try {
+            return loadLatestMessagesOptimized(groupId, count);
+        } catch (Exception e) {
+            System.err.println("Error loading latest messages: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * טעינת הודעות נוספות עם offset - לתאימות עם קוד ישן
+     */
+    public List<String> loadMoreMessages(String groupId, int offset, int limit) {
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        if (limit <= 0 || limit > MAX_PAGE_SIZE) {
+            limit = PAGINATION_SIZE;
+        }
+        
+        try {
+            int page = Math.max(0, offset / limit);
+            return loadMoreMessages(groupId, page);
+        } catch (Exception e) {
+            System.err.println("Error loading more messages: " + e.getMessage());
             return new ArrayList<>();
         }
     }

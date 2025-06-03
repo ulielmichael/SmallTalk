@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.mongodb.internal.logging.LogMessage.Component;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.UI;
@@ -91,121 +92,114 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     private ProgressBar loadingProgressBar;
     private Div loadingMessageDiv;
 
-    @Autowired  // הוספה של autowired לבנאי כדי להבטיח שהתלויות יוזרקו כראוי
-    public Chatpage(ChatService chatService) {  // להזריק את chatService בבנאי במקום להסתמך על הזרקה בשדה
-        this.chatService = chatService;  // שמירת ההפניה לשירות
-        
-        aes = initializeEncryption();
-        encryptionService = new EncryptionService(aes);
+   @Autowired
+public Chatpage(ChatService chatService) {
+    this.chatService = chatService;
+    
+    aes = initializeEncryption();
+    encryptionService = new EncryptionService(aes);
 
-        messageInput = new MessageInput();
-        chatContainer = new VerticalLayout();
-        userListContainer = new VerticalLayout();
+    messageInput = new MessageInput();
+    chatContainer = new VerticalLayout();
+    userListContainer = new VerticalLayout();
 
-        chatContainer.setWidthFull();
-        chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
+    chatContainer.setWidthFull();
+    chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
 
-        chatContainer.getStyle().set("overflow-y", "auto");
-        chatContainer.getStyle().set("border", "1px solid #ddd");
-        chatContainer.addClassName("chat-container");
+    chatContainer.getStyle().set("overflow-y", "auto");
+    chatContainer.getStyle().set("border", "1px solid #ddd");
+    chatContainer.addClassName("chat-container");
 
-        // Configure user list container
-        userListContainer.setWidthFull();
-        userListContainer.getStyle().set("padding", "10px");
-        userListContainer.getStyle().set("margin-bottom", "10px");
-        userListContainer.getStyle().set("border", "1px solid #ddd");
-        userListContainer.getStyle().set("border-radius", "4px");
+    // Configure user list container
+    userListContainer.setWidthFull();
+    userListContainer.getStyle().set("padding", "10px");
+    userListContainer.getStyle().set("margin-bottom", "10px");
+    userListContainer.getStyle().set("border", "1px solid #ddd");
+    userListContainer.getStyle().set("border-radius", "4px");
 
-        // Initially hide user list container
-        userListContainer.setVisible(false);
-        
-        // Create loading components
-        loadingProgressBar = new ProgressBar();
-        loadingProgressBar.setIndeterminate(true);
-        loadingProgressBar.setWidth("100%");
-        loadingProgressBar.setVisible(false);
-        
-        loadingMessageDiv = new Div(new Span("Loading messages..."));
-        loadingMessageDiv.getStyle()
-            .set("text-align", "center")
-            .set("color", "#666")
-            .set("padding", "10px");
-        loadingMessageDiv.setVisible(false);
+    // Initially hide user list container
+    userListContainer.setVisible(false);
+    
+    // Create loading components
+    loadingProgressBar = new ProgressBar();
+    loadingProgressBar.setIndeterminate(true);
+    loadingProgressBar.setWidth("100%");
+    loadingProgressBar.setVisible(false);
+    
+    loadingMessageDiv = new Div(new Span("Loading messages..."));
+    loadingMessageDiv.getStyle()
+        .set("text-align", "center")
+        .set("color", "#666")
+        .set("padding", "10px");
+    loadingMessageDiv.setVisible(false);
 
-        // Create message input and upload layout in a custom way
-        Div messageInputWrapper = createMessageInputWithUpload();
+    // Create message input and upload layout in a custom way
+    Div messageInputWrapper = createMessageInputWithUpload();
 
-        // Initialize sessionId correctly - הזזנו את זה לאחרי האתחול של chatService
-        sessionId = initializeSessionId();
+    // Initialize sessionId
+    sessionId = initializeSessionId();
 
-        // Use authenticated user's email or name if available
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+    // Use authenticated user's email or name if available
+    User currentUser = UserService.getAuthenticatedUser();
+    String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
 
-        // Create group selector
-        groupSelector = new ComboBox<>("Select Group");
-        groupSelector.setItemLabelGenerator(Group::getName);
-        groupSelector.setWidthFull();
+    // Create group selector
+    groupSelector = new ComboBox<>("Select Group");
+    groupSelector.setItemLabelGenerator(Group::getName);
+    groupSelector.setWidthFull();
 
-        // Fill the group selector with the groups the user belongs to
-        if (currentUser != null) {
-            List<Group> userGroups = GroupService.getUserGroups(currentUser.getEmail());
+    // Fill the group selector with the groups the user belongs to
+    if (currentUser != null) {
+        List<Group> userGroups = GroupService.getUserGroups(currentUser.getEmail());
 
-            // If no groups exist, create a default group for this user
-            if (userGroups.isEmpty()) {
-                System.out.println("No groups found for user " + currentUser.getEmail() + ", creating a default group");
-                Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getEmail());
-                userGroups = GroupService.getUserGroups(currentUser.getEmail());
-            }
-
-            groupSelector.setItems(userGroups);
+        // If no groups exist, create a default group for this user
+        if (userGroups.isEmpty()) {
+            System.out.println("No groups found for user " + currentUser.getEmail() + ", creating a default group");
+            Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getEmail());
+            userGroups = GroupService.getUserGroups(currentUser.getEmail());
         }
 
-        groupSelector.addValueChangeListener(event -> {
-            System.out.println("Selected Group: " + event.getValue());
-
-            if (event.getValue() != null) {
-                currentGroupId = event.getValue().getId();
-                System.out.println("Current Group ID set to: " + currentGroupId);
-
-                // Show user list when a group is selected
-                userListContainer.setVisible(true);
-
-                User loggedInUser = UserService.getAuthenticatedUser();
-                String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
-
-                // Update user activity status in chat service
-                if (loggedInUser != null && chatService != null) { // חשוב: בדיקה שהשירות לא null
-                    chatService.updateUserActivity(loggedInUser.getEmail());
-                }
-
-                // Just show the user name, not the group name
-                updateSessionIdDisplay(userName);
-
-                refreshChatHistory();
-                updateUserList();
-            } else {
-                // Hide user list when no group is selected
-                userListContainer.setVisible(false);
-            }
-        });
-        
-        // Create the navigation bar
-        HorizontalLayout navbar = createNavigationBar();
-
-        // Add a section for chat
-        H3 chatHeader = new H3("Chat");
-
-        // Add components to main layout in the correct order
-        add(navbar, groupSelector, userListContainer, chatHeader, loadingProgressBar, 
-            loadingMessageDiv, chatContainer, messageInputWrapper);
-
-        setupMessageHandler();
-        setupCrossBrowserCommunication();
-        
-        // Start a periodic task to update user online status every 30 seconds
-        setupUserStatusUpdateTask();
+        groupSelector.setItems(userGroups);
     }
+
+    groupSelector.addValueChangeListener(event -> {
+        System.out.println("Selected Group: " + event.getValue());
+
+        if (event.getValue() != null) {
+            currentGroupId = event.getValue().getId();
+            System.out.println("Current Group ID set to: " + currentGroupId);
+
+            // Show user list when a group is selected
+            userListContainer.setVisible(true);
+
+            User loggedInUser = UserService.getAuthenticatedUser();
+            String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
+
+            // Just show the user name, not the group name
+            updateSessionIdDisplay(userName);
+
+            refreshChatHistory();
+            updateUserList();
+        } else {
+            // Hide user list when no group is selected
+            userListContainer.setVisible(false);
+        }
+    });
+    
+    // Create the navigation bar
+    HorizontalLayout navbar = createNavigationBar();
+
+    // Add a section for chat
+    H3 chatHeader = new H3("Chat");
+
+    // Add components to main layout in the correct order
+    add(navbar, groupSelector, userListContainer, chatHeader, loadingProgressBar, 
+        loadingMessageDiv, chatContainer, messageInputWrapper);
+
+    setupMessageHandler();
+    setupCrossBrowserCommunication();
+}
+
 
     private HorizontalLayout createNavigationBar() {
         HorizontalLayout navbar = new HorizontalLayout();
@@ -328,18 +322,21 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     }
 
     private void addMessageToDatabase(String formattedMessage, String groupId) {
-        if (groupId == null) {
-            System.err.println("Cannot save message: Group ID is null");
-            return;
-        }
+    if (groupId == null) {
+        System.err.println("Cannot save message: Group ID is null");
+        return;
+    }
 
-        User currentUser = UserService.getAuthenticatedUser();
-        String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
-        
-        // Update user activity in chat service
-        if (currentUser != null && chatService != null) { // חשוב: בדיקה שהשירות לא null
-            chatService.updateUserActivity(currentUser.getEmail());
-        }
+    User currentUser = UserService.getAuthenticatedUser();
+    String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
+
+    // Add message to database using ChatService
+    if (chatService != null) {
+        chatService.addGroupMessage(formattedMessage, groupId, senderId);
+    } else {
+        System.err.println("Cannot save message: ChatService is null");
+    }
+
 
         // Add message to database using ChatService
         if (chatService != null) { // בדיקה שהשירות לא null
@@ -392,17 +389,13 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         initializeChatForAuthenticatedUser();
     }
 
-    private void initializeChatForAuthenticatedUser() {
-        User currentUser = UserService.getAuthenticatedUser();
-        if (currentUser != null && chatService != null) { // חשוב: בדיקה שהשירות לא null
-            // Update user activity status
-            chatService.updateUserActivity(currentUser.getEmail());
-            
-            List<Group> userGroups = loadUserGroups(currentUser);
-
-            setupUserInterface(currentUser, userGroups);
-        }
+ private void initializeChatForAuthenticatedUser() {
+    User currentUser = UserService.getAuthenticatedUser();
+    if (currentUser != null) {
+        List<Group> userGroups = loadUserGroups(currentUser);
+        setupUserInterface(currentUser, userGroups);
     }
+}
 
     private List<Group> loadUserGroups(User currentUser) {
         // Load groups from the GroupService
@@ -425,25 +418,17 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         }
     }
 
-    @Override
+  @Override
     protected void onAttach(AttachEvent attachEvent) {
         super.onAttach(attachEvent);
 
         registerWithBroadcaster();
-
-        UI.getCurrent().access(() -> {
-            // Update user online status on attach
-            User currentUser = UserService.getAuthenticatedUser();
-            if (currentUser != null && chatService != null) { // חשוב: בדיקה שהשירות לא null
-                chatService.updateUserActivity(currentUser.getEmail());
-            }
-        });
-
         checkForNewMessages();
 
         UI ui = attachEvent.getUI();
         if (ui != null) {
-            ui.setPollInterval(500);
+            // Reduce polling frequency for better performance
+            ui.setPollInterval(1000); // Changed from 500ms to 1000ms
         }
     }
 
@@ -460,52 +445,44 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         // This is handled by the timeout in ChatService
     }
     
-    private void setupUserStatusUpdateTask() {
-        UI ui = UI.getCurrent();
-        if (ui != null) {
-            ui.setPollInterval(30000); // 30 seconds
-            
-            // Set up a recurring task to update user status
-            ui.addPollListener(event -> {
-                User currentUser = UserService.getAuthenticatedUser();
-                if (currentUser != null && chatService != null) { // חשוב: בדיקה שהשירות לא null
-                    chatService.updateUserActivity(currentUser.getEmail());
-                }
-                
-                // Update user list to refresh online statuses
-                if (currentGroupId != null) {
-                    updateUserList();
-                }
-            });
-        }
-    }
 
     private void loadExistingMessages() {
-        if (currentGroupId == null || chatService == null) { // חשוב: בדיקה שהשירות לא null
+        if (currentGroupId == null || chatService == null) {
             return;
         }
         
-        // Show loading indicators
+        // Show minimal loading indicator
         showLoadingIndicators(true);
         
-        // Clear the chat container
+        // Clear chat container
         chatContainer.removeAll();
         
-        // Use CompletableFuture to load messages asynchronously
+        // Load messages with improved performance
         chatService.loadMessagesAsync(currentGroupId)
             .thenAccept(existingMessages -> {
                 UI ui = UI.getCurrent();
                 if (ui != null && ui.isAttached()) {
                     ui.access(() -> {
-                        for (String message : existingMessages) {
-                            addMessageToChat(message);
+                        try {
+                            // Add messages in batches for smoother UI
+                            addMessagesInBatches(existingMessages);
+                            lastSeenMessageCount = existingMessages.size();
+                            
+                            // Hide loading indicators quickly
+                            showLoadingIndicators(false);
+                            
+                            // Scroll to bottom after short delay
+                            UI.getCurrent().getPage().executeJs(
+                                "setTimeout(() => { " +
+                                "  const chatContainer = document.querySelector('.chat-container');" +
+                                "  if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;" +
+                                "}, 50);"
+                            );
+                            
+                        } catch (Exception e) {
+                            System.err.println("Error displaying messages: " + e.getMessage());
+                            showLoadingIndicators(false);
                         }
-                        lastSeenMessageCount = existingMessages.size();
-                        
-                        // Hide loading indicators
-                        showLoadingIndicators(false);
-                        
-                        scrollToBottom();
                         ui.push();
                     });
                 }
@@ -515,27 +492,74 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                 if (ui != null && ui.isAttached()) {
                     ui.access(() -> {
                         showLoadingIndicators(false);
-                        
-                        Notification.show("Error loading messages: " + ex.getMessage(),
-                                3000, Notification.Position.MIDDLE);
+                        // Don't show error to user, just log it
+                        System.err.println("Error loading messages: " + ex.getMessage());
                         ui.push();
                     });
                 }
                 return null;
             });
     }
-    
-    private void showLoadingIndicators(boolean show) {
-        UI ui = UI.getCurrent();
-        if (ui != null && ui.isAttached()) {
-            ui.access(() -> {
-                loadingProgressBar.setVisible(show);
-                loadingMessageDiv.setVisible(show);
-                ui.push();
-            });
+
+        private void addMessagesInBatches(List<String> messages) {
+        if (messages.isEmpty()) return;
+        
+        final int BATCH_SIZE = 10;
+        final int DELAY_MS = 10;
+        
+        for (int i = 0; i < messages.size(); i += BATCH_SIZE) {
+            final int startIndex = i;
+            final int endIndex = Math.min(i + BATCH_SIZE, messages.size());
+            final List<String> batch = messages.subList(startIndex, endIndex);
+            
+            // Add batch with small delay for smooth rendering
+            UI.getCurrent().getPage().executeJs(
+                "setTimeout(() => { window.addMessageBatch && window.addMessageBatch(); }, " + (i * DELAY_MS / BATCH_SIZE) + ");"
+            );
+            
+            // Add messages immediately (the timeout is just for smooth scrolling)
+            for (String message : batch) {
+                addMessageToChat(message);
+            }
         }
     }
+    private void addMessageToChat(String message) {
+    if (message == null || message.trim().isEmpty()) {
+        return;
+    }
+    
+    Div messageDiv = new Div();
+    messageDiv.getElement().setProperty("innerHTML", message);
 
+    // Optimized styling
+    messageDiv.addClassName("chat-message");
+    messageDiv.getStyle()
+        .set("background-color", "#f8f9fa")
+        .set("color", "#333")
+        .set("padding", "8px 12px")
+        .set("margin-bottom", "6px")
+        .set("border-radius", "8px")
+        .set("word-wrap", "break-word")
+        .set("max-width", "100%")
+        .set("animation", "fadeIn 0.3s ease-in");
+
+    chatContainer.add(messageDiv);
+    
+    // Limit number of messages in DOM for performance
+    if (chatContainer.getComponentCount() > 100) {
+        com.vaadin.flow.component.Component firstComponent = chatContainer.getComponentAt(0);
+        chatContainer.remove(firstComponent);
+    }
+}
+    private void showLoadingIndicators(boolean show) {
+        // Simplified loading indicator
+        if (loadingProgressBar != null) {
+            loadingProgressBar.setVisible(show);
+        }
+        if (loadingMessageDiv != null) {
+            loadingMessageDiv.setVisible(show && chatContainer.getComponentCount() == 0);
+        }
+    }
     private void refreshChatHistory() {
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
@@ -549,75 +573,71 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         }
     }
 
-    private void setupMessageHandler() {
-        UI currentUI = UI.getCurrent();
-        VaadinSession currentSession = VaadinSession.getCurrent();
+  private void setupMessageHandler() {
+    UI currentUI = UI.getCurrent();
+    VaadinSession currentSession = VaadinSession.getCurrent();
 
-        messageInput.addSubmitListener(submitEvent -> {
-            if (currentGroupId == null) {
-                Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
-                return;
-            }
+    messageInput.addSubmitListener(submitEvent -> {
+        if (currentGroupId == null) {
+            Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
+            return;
+        }
 
-            String message = submitEvent.getValue();
-            String timestamp = dateFormat.format(new Date());
+        String message = submitEvent.getValue();
+        String timestamp = dateFormat.format(new Date());
 
-            User currentUser = UserService.getAuthenticatedUser();
-            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-            
-            // Update user activity status
-            if (currentUser != null && chatService != null) { // חשוב: בדיקה שהשירות לא null
-                chatService.updateUserActivity(currentUser.getEmail());
-            }
+        User currentUser = UserService.getAuthenticatedUser();
+        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
 
-            System.out.println("Received message from " + displayName + " in group " + currentGroupId + ": " + message);
+        System.out.println("Received message from " + displayName + " in group " + currentGroupId + ": " + message);
 
-            String formattedMessage = "[" + timestamp + "] " + displayName + ":<br>" + message;
-            sendGroupMessage(formattedMessage, currentGroupId);
+        String formattedMessage = "[" + timestamp + "] " + displayName + ":<br>" + message;
+        sendGroupMessage(formattedMessage, currentGroupId);
 
-            encryptionService.encryptStringAsync(message)
-                    .thenAccept(encryptedMessage -> {
-                        if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
-                            currentSession.lock();
-                            try {
-                                currentUI.access(() -> {
-                                    String encTimestamp = dateFormat.format(new Date());
-                                    String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
+        encryptionService.encryptStringAsync(message)
+                .thenAccept(encryptedMessage -> {
+                    if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
+                        currentSession.lock();
+                        try {
+                            currentUI.access(() -> {
+                                String encTimestamp = dateFormat.format(new Date());
+                                String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
 
-                                    String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName +
-                                            " <b>[Encrypted]</b>:<br>" + encodedMessage;
+                                String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName +
+                                        " <b>[Encrypted]</b>:<br>" + encodedMessage;
 
-                                    sendGroupMessage(encryptedFormattedMessage, currentGroupId);
+                                sendGroupMessage(encryptedFormattedMessage, currentGroupId);
 
-                                    decryptAndDisplayMessage(encodedMessage, currentGroupId);
-                                    currentUI.push();
-                                });
-                            } finally {
-                                currentSession.unlock();
-                            }
+                                decryptAndDisplayMessage(encodedMessage, currentGroupId);
+                                currentUI.push();
+                            });
+                        } finally {
+                            currentSession.unlock();
                         }
-                    })
-                    .exceptionally(ex -> {
-                        if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
-                            currentSession.lock();
-                            try {
-                                currentUI.access(() -> {
-                                    String errorTimestamp = dateFormat.format(new Date());
-                                    String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                            " <b>[Error]</b>:<br>Error encrypting message: " + ex.getMessage();
+                    }
+                })
+                .exceptionally(ex -> {
+                    if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
+                        currentSession.lock();
+                        try {
+                            currentUI.access(() -> {
+                                String errorTimestamp = dateFormat.format(new Date());
+                                String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                                        " <b>[Error]</b>:<br>Error encrypting message: " + ex.getMessage();
 
-                                    sendGroupMessage(errorMessage, currentGroupId);
+                                sendGroupMessage(errorMessage, currentGroupId);
 
-                                    currentUI.push();
-                                });
-                            } finally {
-                                currentSession.unlock();
-                            }
+                                currentUI.push();
+                            });
+                        } finally {
+                            currentSession.unlock();
                         }
-                        return null;
-                    });
-        });
-    }
+                    }
+                    return null;
+                });
+    });
+}
+
 
     private void setupCrossBrowserCommunication() {
         UI ui = UI.getCurrent();
@@ -652,28 +672,43 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     }
 
     public void checkForNewMessages() {
-        if (currentGroupId == null || chatService == null) { // חשוב: בדיקה שהשירות לא null
+        if (currentGroupId == null || chatService == null) {
             return;
         }
 
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
             ui.access(() -> {
-                List<String> allMessages = chatService.getGroupMessages(currentGroupId);
-                int currentMessageCount = allMessages.size();
+                try {
+                    List<String> allMessages = chatService.getGroupMessages(currentGroupId);
+                    int currentMessageCount = allMessages.size();
 
-                if (currentMessageCount > lastSeenMessageCount) {
-                    for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
-                        addMessageToChat(allMessages.get(i));
+                    if (currentMessageCount > lastSeenMessageCount) {
+                        // Add only new messages
+                        for (int i = lastSeenMessageCount; i < currentMessageCount; i++) {
+                            addMessageToChat(allMessages.get(i));
+                        }
+                        lastSeenMessageCount = currentMessageCount;
+
+                        // Smooth scroll to bottom
+                        UI.getCurrent().getPage().executeJs(
+                            "setTimeout(() => { " +
+                            "  const chatContainer = document.querySelector('.chat-container');" +
+                            "  if (chatContainer) {" +
+                            "    chatContainer.scrollTo({" +
+                            "      top: chatContainer.scrollHeight," +
+                            "      behavior: 'smooth'" +
+                            "    });" +
+                            "  }" +
+                            "}, 100);"
+                        );
+
+                        ui.getPage().executeJs("window.notifyOtherWindows && window.notifyOtherWindows();");
                     }
-                    lastSeenMessageCount = currentMessageCount;
-
-                    scrollToBottom();
-
-                    ui.getPage().executeJs("window.notifyOtherWindows();");
-
-                    ui.push();
+                } catch (Exception e) {
+                    System.err.println("Error checking messages: " + e.getMessage());
                 }
+                ui.push();
             });
         }
     }
@@ -720,52 +755,47 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     }
 
     private String initializeSessionId() {
-        VaadinSession session = VaadinSession.getCurrent();
-        String uniqueId;
+    VaadinSession session = VaadinSession.getCurrent();
+    String uniqueId;
 
-        User currentUser = UserService.getAuthenticatedUser();
-        if (currentUser != null) {
-            uniqueId = currentUser.getFullName();
-            session.setAttribute("sessionId", uniqueId);
-
-            UI.getCurrent().getPage().executeJs(
-                    "localStorage.setItem('chat-session-id', $0);", uniqueId);
-
-            updateSessionIdDisplay(uniqueId);
-            
-            // Update user activity in chat service
-            if (chatService != null) { // חשוב: בדיקה שהשירות לא null
-                chatService.updateUserActivity(currentUser.getEmail());
-            }
-
-            return uniqueId;
-        }
+    User currentUser = UserService.getAuthenticatedUser();
+    if (currentUser != null) {
+        uniqueId = currentUser.getFullName();
+        session.setAttribute("sessionId", uniqueId);
 
         UI.getCurrent().getPage().executeJs(
-                "return localStorage.getItem('chat-session-id');")
-                .then(String.class, result -> {
-                    if (result != null && !result.isEmpty()) {
-                        session.setAttribute("sessionId", result);
+                "localStorage.setItem('chat-session-id', $0);", uniqueId);
 
-                        updateSessionIdDisplay(result);
-                        this.sessionId = result;
-                    }
-                });
-
-        if (session.getAttribute("sessionId") == null) {
-            uniqueId = "Guest-" + UUID.randomUUID().toString().substring(0, 8);
-            session.setAttribute("sessionId", uniqueId);
-
-            UI.getCurrent().getPage().executeJs(
-                    "localStorage.setItem('chat-session-id', $0);", uniqueId);
-
-            return uniqueId;
-        } else {
-            uniqueId = session.getAttribute("sessionId").toString();
-        }
+        updateSessionIdDisplay(uniqueId);
 
         return uniqueId;
     }
+
+    UI.getCurrent().getPage().executeJs(
+            "return localStorage.getItem('chat-session-id');")
+            .then(String.class, result -> {
+                if (result != null && !result.isEmpty()) {
+                    session.setAttribute("sessionId", result);
+
+                    updateSessionIdDisplay(result);
+                    this.sessionId = result;
+                }
+            });
+
+    if (session.getAttribute("sessionId") == null) {
+        uniqueId = "Guest-" + UUID.randomUUID().toString().substring(0, 8);
+        session.setAttribute("sessionId", uniqueId);
+
+        UI.getCurrent().getPage().executeJs(
+                "localStorage.setItem('chat-session-id', $0);", uniqueId);
+
+        return uniqueId;
+    } else {
+        uniqueId = session.getAttribute("sessionId").toString();
+    }
+
+    return uniqueId;
+}
 
     private void updateSessionIdDisplay(String id) {
         // Update just the user's name without group name
@@ -932,21 +962,8 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
 
         UI.getCurrent().getPage().executeJs("window.notifyOtherWindows();");
     }
-
-    private void addMessageToChat(String message) {
-        Div messageDiv = new Div();
-        messageDiv.getElement().setProperty("innerHTML", message);
-
-        messageDiv.getStyle().set("background-color", "#f0f0f0");
-        messageDiv.getStyle().set("color", "#333");
-        messageDiv.getStyle().set("padding", "8px 12px");
-        messageDiv.getStyle().set("margin-bottom", "8px");
-        messageDiv.getStyle().set("border-radius", "8px");
-        messageDiv.getStyle().set("word-wrap", "break-word");
-
-        chatContainer.add(messageDiv);
-        scrollToBottom();
-    }
+ 
+    
 
     private void scrollToBottom() {
         UI.getCurrent().getPage().executeJs(
@@ -958,6 +975,11 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                         + "}, 100);");
     }
 
+   private void preloadMessagesForGroup(String groupId) {
+        if (groupId != null && chatService != null) {
+            chatService.getGroupMessages(groupId);
+        }
+    }
     private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
         try {
             byte[] encryptedBytes = Base64.getDecoder().decode(encodedMessage);
@@ -1036,89 +1058,67 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         }
     }
 
-   private void updateUserList() {
-    if (currentGroupId == null) {
-        userListContainer.setVisible(false);
-        return;
-    }
-
-    userListContainer.setVisible(true);
-
-    // Clear previous list
-    userListContainer.removeAll();
-
-    // Get group members
-    Group currentGroup = GroupService.getGroupById(currentGroupId);
-    if (currentGroup == null) {
-        userListContainer.add(new Span("No members in this group"));
-        return;
-    }
-
-    // Get the list of user emails/IDs
-    List<String> memberEmails = currentGroup.getUsers();
-
-    if (memberEmails == null || memberEmails.isEmpty()) {
-        userListContainer.add(new Span("No members in this group"));
-        return;
-    }
-
-    // Create a horizontal layout with space-between for the header and members
-    HorizontalLayout headerAndMembersLayout = new HorizontalLayout();
-    headerAndMembersLayout.setWidthFull();
-    headerAndMembersLayout.setJustifyContentMode(JustifyContentMode.BETWEEN);
-    headerAndMembersLayout.setAlignItems(Alignment.CENTER);
-
-    // Add the Group Members header to the left
-    H3 groupMembersHeader = new H3("Group Members");
-    groupMembersHeader.getStyle().set("margin", "0");
-    
-    // Create the members container to the right
-    HorizontalLayout membersLayout = new HorizontalLayout();
-    membersLayout.getStyle().set("flex-wrap", "wrap");
-    membersLayout.setAlignItems(Alignment.CENTER);
-
-    // Add members to the list with online status indicators
-    for (String memberEmail : memberEmails) {
-        User member = UserService.getUserByEmail(memberEmail);
-        if (member != null) {
-            Div memberDiv = new Div();
-
-            memberDiv.getStyle()
-                .set("background-color", "#e4e4e4")
-                .set("color", "#333")
-                .set("padding", "6px 12px")
-                .set("margin", "4px")
-                .set("border-radius", "16px")
-                .set("display", "flex")
-                .set("align-items", "center");
-
-            // Add an online status indicator (green dot for online, gray for offline)
-            // This is a mock implementation - you would need actual online status tracking
-            boolean isOnline = Math.random() > 0.5; // Mock status - replace with actual status check
-            
-            Div statusDot = new Div();
-            statusDot.getStyle()
-                .set("width", "8px")
-                .set("height", "8px")
-                .set("border-radius", "50%")
-                .set("background-color", isOnline ? "#4CAF50" : "#9E9E9E")
-                .set("margin-right", "6px");
-            
-            // Add a user icon
-            Icon userIcon = VaadinIcon.USER.create();
-            userIcon.getStyle().set("margin-right", "6px");
-
-            Span nameSpan = new Span(member.getFullName());
-            memberDiv.add(statusDot, userIcon, nameSpan);
-
-            membersLayout.add(memberDiv);
+ private void updateUserList() {
+        if (currentGroupId == null) {
+            userListContainer.setVisible(false);
+            return;
         }
-    }
 
-    // Add both components to the layout
-    headerAndMembersLayout.add(groupMembersHeader, membersLayout);
-    userListContainer.add(headerAndMembersLayout);
-}
+        userListContainer.setVisible(true);
+        userListContainer.removeAll();
+
+        Group currentGroup = GroupService.getGroupById(currentGroupId);
+        if (currentGroup == null || currentGroup.getUsers() == null || currentGroup.getUsers().isEmpty()) {
+            userListContainer.add(new Span("No members in this group"));
+            return;
+        }
+
+        // Create header and members layout
+        HorizontalLayout headerAndMembersLayout = new HorizontalLayout();
+        headerAndMembersLayout.setWidthFull();
+        headerAndMembersLayout.setJustifyContentMode(JustifyContentMode.BETWEEN);
+        headerAndMembersLayout.setAlignItems(Alignment.CENTER);
+
+        // Group Members header
+        H3 groupMembersHeader = new H3("Group Members (" + currentGroup.getUsers().size() + ")");
+        groupMembersHeader.getStyle().set("margin", "0");
+        
+        // Members container
+        HorizontalLayout membersLayout = new HorizontalLayout();
+        membersLayout.getStyle().set("flex-wrap", "wrap");
+        membersLayout.setAlignItems(Alignment.CENTER);
+
+        // Add members without online status
+        for (String memberEmail : currentGroup.getUsers()) {
+            User member = UserService.getUserByEmail(memberEmail);
+            if (member != null) {
+                Div memberDiv = new Div();
+
+                memberDiv.getStyle()
+                    .set("background-color", "#e4e4e4")
+                    .set("color", "#333")
+                    .set("padding", "6px 12px")
+                    .set("margin", "4px")
+                    .set("border-radius", "16px")
+                    .set("display", "flex")
+                    .set("align-items", "center");
+
+                // Just user icon and name (no status dot)
+                Icon userIcon = VaadinIcon.USER.create();
+                userIcon.getStyle()
+                    .set("margin-right", "6px")
+                    .set("color", "#666");
+
+                Span nameSpan = new Span(member.getFullName());
+                memberDiv.add(userIcon, nameSpan);
+
+                membersLayout.add(memberDiv);
+            }
+        }
+
+        headerAndMembersLayout.add(groupMembersHeader, membersLayout);
+        userListContainer.add(headerAndMembersLayout);
+    }
 
     private void createNewGroup() {
         Dialog dialog = new Dialog();
