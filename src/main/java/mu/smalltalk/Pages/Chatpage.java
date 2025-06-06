@@ -4,22 +4,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
-import com.mongodb.internal.logging.LogMessage.Component;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.UI;
-import com.vaadin.flow.component.Unit;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
@@ -47,6 +43,7 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.shared.Registration;
 
+import mu.smalltalk.Repositories.MessageRepository;
 import mu.smalltalk.Services.ChatService;
 import mu.smalltalk.Services.EncryptionService;
 import mu.smalltalk.Services.GlobalMessageBroadcaster;
@@ -56,7 +53,6 @@ import mu.smalltalk.Services.UserService;
 import mu.smalltalk.entitis.Group;
 import mu.smalltalk.entitis.Message;
 import mu.smalltalk.entitis.User;
-import mu.smalltalk.Repositories.MessageRepository;
 import mu.smalltalk.security.Aes256;
 
 @Route("chat")
@@ -69,7 +65,7 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     private MongoDbSerivce mongoDbService;
     
     @Autowired
-    private ChatService chatService;  // הבעיה הייתה כאן - אין צורך בfinal ובאתחול ידני בבנאי
+    private ChatService chatService;
 
     private final EncryptionService encryptionService;
     
@@ -78,7 +74,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     private final Aes256 aes;
     private final VerticalLayout chatContainer;
     private final VerticalLayout userListContainer;
-    private static final int CHAT_HEIGHT = 500;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     private String sessionId;
@@ -91,6 +86,11 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     // UI components for loading state
     private ProgressBar loadingProgressBar;
     private Div loadingMessageDiv;
+    
+    // New components for enhanced functionality
+    private Button toggleEncryptionButton;
+    private boolean showEncryptionMessages = true;
+    private Div messageStatusDiv;
 
    @Autowired
 public Chatpage(ChatService chatService) {
@@ -103,12 +103,17 @@ public Chatpage(ChatService chatService) {
     chatContainer = new VerticalLayout();
     userListContainer = new VerticalLayout();
 
-    chatContainer.setWidthFull();
-    chatContainer.setHeight(CHAT_HEIGHT, Unit.PIXELS);
+    // Make the entire layout take full height
+    setSizeFull();
+    setPadding(false);
+    setSpacing(false);
 
+    // Configure chat container for full size
+    chatContainer.setSizeFull();
     chatContainer.getStyle().set("overflow-y", "auto");
     chatContainer.getStyle().set("border", "1px solid #ddd");
     chatContainer.addClassName("chat-container");
+    chatContainer.getStyle().set("flex-grow", "1");
 
     // Configure user list container
     userListContainer.setWidthFull();
@@ -116,6 +121,7 @@ public Chatpage(ChatService chatService) {
     userListContainer.getStyle().set("margin-bottom", "10px");
     userListContainer.getStyle().set("border", "1px solid #ddd");
     userListContainer.getStyle().set("border-radius", "4px");
+    userListContainer.getStyle().set("flex-shrink", "0");
 
     // Initially hide user list container
     userListContainer.setVisible(false);
@@ -133,7 +139,26 @@ public Chatpage(ChatService chatService) {
         .set("padding", "10px");
     loadingMessageDiv.setVisible(false);
 
-    // Create message input and upload layout in a custom way
+    // Create message status div
+    messageStatusDiv = new Div();
+    messageStatusDiv.setVisible(false);
+    messageStatusDiv.getStyle()
+        .set("background-color", "#e8f5e8")
+        .set("color", "#2d5a2d")
+        .set("padding", "8px")
+        .set("margin", "5px 0")
+        .set("border-radius", "4px")
+        .set("text-align", "center");
+
+    // Create toggle encryption button
+    toggleEncryptionButton = new Button("Hide Encryption", new Icon(VaadinIcon.EYE_SLASH));
+    toggleEncryptionButton.addClickListener(e -> toggleEncryptionDisplay());
+    toggleEncryptionButton.getStyle()
+        .set("margin-bottom", "10px")
+        .set("background-color", "#f0f0f0")
+        .set("border", "1px solid #ccc");
+
+    // Create message input and upload layout
     Div messageInputWrapper = createMessageInputWithUpload();
 
     // Initialize sessionId
@@ -147,6 +172,7 @@ public Chatpage(ChatService chatService) {
     groupSelector = new ComboBox<>("Select Group");
     groupSelector.setItemLabelGenerator(Group::getName);
     groupSelector.setWidthFull();
+    groupSelector.getStyle().set("flex-shrink", "0");
 
     // Fill the group selector with the groups the user belongs to
     if (currentUser != null) {
@@ -171,6 +197,7 @@ public Chatpage(ChatService chatService) {
 
             // Show user list when a group is selected
             userListContainer.setVisible(true);
+            toggleEncryptionButton.setVisible(true);
 
             User loggedInUser = UserService.getAuthenticatedUser();
             String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
@@ -180,9 +207,22 @@ public Chatpage(ChatService chatService) {
 
             refreshChatHistory();
             updateUserList();
+            
+            // Enable message input when group is selected
+            messageInput.setEnabled(true);
+            if (mediaUpload != null) {
+                mediaUpload.setVisible(true);
+            }
         } else {
             // Hide user list when no group is selected
             userListContainer.setVisible(false);
+            toggleEncryptionButton.setVisible(false);
+            
+            // Disable message input when no group is selected
+            messageInput.setEnabled(false);
+            if (mediaUpload != null) {
+                mediaUpload.setVisible(false);
+            }
         }
     });
     
@@ -191,15 +231,66 @@ public Chatpage(ChatService chatService) {
 
     // Add a section for chat
     H3 chatHeader = new H3("Chat");
+    chatHeader.getStyle().set("flex-shrink", "0");
+
+    // Initially disable message input until group is selected
+    messageInput.setEnabled(false);
+   
 
     // Add components to main layout in the correct order
-    add(navbar, groupSelector, userListContainer, chatHeader, loadingProgressBar, 
-        loadingMessageDiv, chatContainer, messageInputWrapper);
+    add(navbar, groupSelector, toggleEncryptionButton, userListContainer, chatHeader, 
+        loadingProgressBar, loadingMessageDiv, messageStatusDiv, chatContainer, messageInputWrapper);
+
+    // Set flex properties to make chat container take remaining space
+    setFlexGrow(1, chatContainer);
 
     setupMessageHandler();
     setupCrossBrowserCommunication();
+    
+    // Initially hide encryption toggle button
+    toggleEncryptionButton.setVisible(false);
 }
 
+
+    private void toggleEncryptionDisplay() {
+        showEncryptionMessages = !showEncryptionMessages;
+        
+        if (showEncryptionMessages) {
+            toggleEncryptionButton.setText("Hide Encryption");
+            toggleEncryptionButton.setIcon(new Icon(VaadinIcon.EYE_SLASH));
+        } else {
+            toggleEncryptionButton.setText("Show Encryption");
+            toggleEncryptionButton.setIcon(new Icon(VaadinIcon.EYE));
+        }
+        
+        // Refresh chat to apply filter
+        refreshChatHistory();
+    }
+
+    private void showMessageStatus(String status, boolean isSuccess) {
+        messageStatusDiv.removeAll();
+        messageStatusDiv.add(new Span(status));
+        
+        if (isSuccess) {
+            messageStatusDiv.getStyle()
+                .set("background-color", "#e8f5e8")
+                .set("color", "#2d5a2d");
+        } else {
+            messageStatusDiv.getStyle()
+                .set("background-color", "#ffeaea")
+                .set("color", "#d32f2f");
+        }
+        
+        messageStatusDiv.setVisible(true);
+        
+        // Auto-hide after 3 seconds
+        UI.getCurrent().getPage().executeJs(
+            "setTimeout(() => { " +
+            "  const statusDiv = document.querySelector('.message-status');" +
+            "  if (statusDiv) statusDiv.style.display = 'none';" +
+            "}, 3000);"
+        );
+    }
 
     private HorizontalLayout createNavigationBar() {
         HorizontalLayout navbar = new HorizontalLayout();
@@ -213,7 +304,8 @@ public Chatpage(ChatService chatService) {
             .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)")
             .set("position", "sticky")
             .set("top", "0")
-            .set("z-index", "1000");
+            .set("z-index", "1000")
+            .set("flex-shrink", "0");
         
         // Logo container with image and text
         HorizontalLayout logoContainer = new HorizontalLayout();
@@ -322,24 +414,16 @@ public Chatpage(ChatService chatService) {
     }
 
     private void addMessageToDatabase(String formattedMessage, String groupId) {
-    if (groupId == null) {
-        System.err.println("Cannot save message: Group ID is null");
-        return;
-    }
+        if (groupId == null) {
+            System.err.println("Cannot save message: Group ID is null");
+            return;
+        }
 
-    User currentUser = UserService.getAuthenticatedUser();
-    String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
-
-    // Add message to database using ChatService
-    if (chatService != null) {
-        chatService.addGroupMessage(formattedMessage, groupId, senderId);
-    } else {
-        System.err.println("Cannot save message: ChatService is null");
-    }
-
+        User currentUser = UserService.getAuthenticatedUser();
+        String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
 
         // Add message to database using ChatService
-        if (chatService != null) { // בדיקה שהשירות לא null
+        if (chatService != null) {
             chatService.addGroupMessage(formattedMessage, groupId, senderId);
         } else {
             System.err.println("Cannot save message: ChatService is null");
@@ -356,6 +440,7 @@ public Chatpage(ChatService chatService) {
         messageInputWrapper.getStyle().set("background-color", "#f0f0f0");
         messageInputWrapper.getStyle().set("border-radius", "4px");
         messageInputWrapper.getStyle().set("padding", "0");
+        messageInputWrapper.getStyle().set("flex-shrink", "0");
 
         // Style the message input to take most of the space but leave room for buttons
         messageInput.setWidth("75%");
@@ -365,14 +450,16 @@ public Chatpage(ChatService chatService) {
         mediaUpload = new Upload(buffer);
         configureMediaUpload(mediaUpload, buffer);
 
-        // Create a container for the upload button to control its position and
-        // appearance
+        // Create a container for the upload button to control its position and appearance
         Div uploadButtonContainer = new Div(mediaUpload);
         uploadButtonContainer.setWidth("15%");
         uploadButtonContainer.getStyle().set("display", "flex");
         uploadButtonContainer.getStyle().set("align-items", "center");
         uploadButtonContainer.getStyle().set("justify-content", "center");
         uploadButtonContainer.getStyle().set("padding", "0 8px");
+
+        // Initially hide media upload
+        mediaUpload.setVisible(false);
 
         // Add message input and upload button to the wrapper
         messageInputWrapper.add(messageInput, uploadButtonContainer);
@@ -389,13 +476,13 @@ public Chatpage(ChatService chatService) {
         initializeChatForAuthenticatedUser();
     }
 
- private void initializeChatForAuthenticatedUser() {
-    User currentUser = UserService.getAuthenticatedUser();
-    if (currentUser != null) {
-        List<Group> userGroups = loadUserGroups(currentUser);
-        setupUserInterface(currentUser, userGroups);
+    private void initializeChatForAuthenticatedUser() {
+        User currentUser = UserService.getAuthenticatedUser();
+        if (currentUser != null) {
+            List<Group> userGroups = loadUserGroups(currentUser);
+            setupUserInterface(currentUser, userGroups);
+        }
     }
-}
 
     private List<Group> loadUserGroups(User currentUser) {
         // Load groups from the GroupService
@@ -418,7 +505,7 @@ public Chatpage(ChatService chatService) {
         }
     }
 
-  @Override
+    @Override
     protected void onAttach(AttachEvent attachEvent) {
         super.onAttach(attachEvent);
 
@@ -444,7 +531,6 @@ public Chatpage(ChatService chatService) {
         // When detaching, we don't mark the user as offline immediately
         // This is handled by the timeout in ChatService
     }
-    
 
     private void loadExistingMessages() {
         if (currentGroupId == null || chatService == null) {
@@ -464,8 +550,11 @@ public Chatpage(ChatService chatService) {
                 if (ui != null && ui.isAttached()) {
                     ui.access(() -> {
                         try {
+                            // Filter messages based on encryption display setting
+                            List<String> filteredMessages = filterMessages(existingMessages);
+                            
                             // Add messages in batches for smoother UI
-                            addMessagesInBatches(existingMessages);
+                            addMessagesInBatches(filteredMessages);
                             lastSeenMessageCount = existingMessages.size();
                             
                             // Hide loading indicators quickly
@@ -501,7 +590,20 @@ public Chatpage(ChatService chatService) {
             });
     }
 
-        private void addMessagesInBatches(List<String> messages) {
+    private List<String> filterMessages(List<String> messages) {
+        if (showEncryptionMessages) {
+            return messages;
+        }
+        
+        // Filter out encryption-related messages
+        return messages.stream()
+            .filter(message -> !message.contains("[Encrypted]") && 
+                             !message.contains("[Decrypted]") && 
+                             !message.contains("[File Encrypted]"))
+            .collect(Collectors.toList());
+    }
+
+    private void addMessagesInBatches(List<String> messages) {
         if (messages.isEmpty()) return;
         
         final int BATCH_SIZE = 10;
@@ -523,34 +625,44 @@ public Chatpage(ChatService chatService) {
             }
         }
     }
+
     private void addMessageToChat(String message) {
-    if (message == null || message.trim().isEmpty()) {
-        return;
-    }
-    
-    Div messageDiv = new Div();
-    messageDiv.getElement().setProperty("innerHTML", message);
+        if (message == null || message.trim().isEmpty()) {
+            return;
+        }
+        
+        // Filter encryption messages if setting is disabled
+        if (!showEncryptionMessages && 
+            (message.contains("[Encrypted]") || 
+             message.contains("[Decrypted]") || 
+             message.contains("[File Encrypted]"))) {
+            return;
+        }
+        
+        Div messageDiv = new Div();
+        messageDiv.getElement().setProperty("innerHTML", message);
 
-    // Optimized styling
-    messageDiv.addClassName("chat-message");
-    messageDiv.getStyle()
-        .set("background-color", "#f8f9fa")
-        .set("color", "#333")
-        .set("padding", "8px 12px")
-        .set("margin-bottom", "6px")
-        .set("border-radius", "8px")
-        .set("word-wrap", "break-word")
-        .set("max-width", "100%")
-        .set("animation", "fadeIn 0.3s ease-in");
+        // Optimized styling
+        messageDiv.addClassName("chat-message");
+        messageDiv.getStyle()
+            .set("background-color", "#f8f9fa")
+            .set("color", "#333")
+            .set("padding", "8px 12px")
+            .set("margin-bottom", "6px")
+            .set("border-radius", "8px")
+            .set("word-wrap", "break-word")
+            .set("max-width", "100%")
+            .set("animation", "fadeIn 0.3s ease-in");
 
-    chatContainer.add(messageDiv);
-    
-    // Limit number of messages in DOM for performance
-    if (chatContainer.getComponentCount() > 100) {
-        com.vaadin.flow.component.Component firstComponent = chatContainer.getComponentAt(0);
-        chatContainer.remove(firstComponent);
+        chatContainer.add(messageDiv);
+        
+        // Limit number of messages in DOM for performance
+        if (chatContainer.getComponentCount() > 100) {
+            com.vaadin.flow.component.Component firstComponent = chatContainer.getComponentAt(0);
+            chatContainer.remove(firstComponent);
+        }
     }
-}
+
     private void showLoadingIndicators(boolean show) {
         // Simplified loading indicator
         if (loadingProgressBar != null) {
@@ -560,6 +672,7 @@ public Chatpage(ChatService chatService) {
             loadingMessageDiv.setVisible(show && chatContainer.getComponentCount() == 0);
         }
     }
+
     private void refreshChatHistory() {
         UI ui = UI.getCurrent();
         if (ui != null && ui.isAttached()) {
@@ -573,7 +686,7 @@ public Chatpage(ChatService chatService) {
         }
     }
 
-  private void setupMessageHandler() {
+   private void setupMessageHandler() {
     UI currentUI = UI.getCurrent();
     VaadinSession currentSession = VaadinSession.getCurrent();
 
@@ -591,8 +704,16 @@ public Chatpage(ChatService chatService) {
 
         System.out.println("Received message from " + displayName + " in group " + currentGroupId + ": " + message);
 
+        // Show sending status
+        showMessageStatus("Sending text message...", true);
+
         String formattedMessage = "[" + timestamp + "] " + displayName + ":<br>" + message;
-        sendGroupMessage(formattedMessage, currentGroupId);
+        
+        // הוסף את ההודעה מיד לצ'אט של השולח
+        addMessageToChat(formattedMessage);
+        
+        // שלח את ההודעה לבסיס הנתונים ולמשתמשים אחרים (ללא UI operations)
+        sendGroupMessageSafely(formattedMessage, currentGroupId);
 
         encryptionService.encryptStringAsync(message)
                 .thenAccept(encryptedMessage -> {
@@ -606,9 +727,17 @@ public Chatpage(ChatService chatService) {
                                 String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName +
                                         " <b>[Encrypted]</b>:<br>" + encodedMessage;
 
-                                sendGroupMessage(encryptedFormattedMessage, currentGroupId);
+                                // הוסף את ההודעה המוצפנת מיד לצ'אט של השולח
+                                addMessageToChat(encryptedFormattedMessage);
+                                
+                                // שלח את ההודעה המוצפנת (ללא UI operations)
+                                sendGroupMessageSafely(encryptedFormattedMessage, currentGroupId);
 
                                 decryptAndDisplayMessage(encodedMessage, currentGroupId);
+                                
+                                // Show success status
+                                showMessageStatus("Text message sent successfully!", true);
+                                
                                 currentUI.push();
                             });
                         } finally {
@@ -625,7 +754,14 @@ public Chatpage(ChatService chatService) {
                                 String errorMessage = "[" + errorTimestamp + "] " + displayName +
                                         " <b>[Error]</b>:<br>Error encrypting message: " + ex.getMessage();
 
-                                sendGroupMessage(errorMessage, currentGroupId);
+                                // הוסף את הודעת השגיאה מיד לצ'אט של השולח
+                                addMessageToChat(errorMessage);
+                                
+                                // שלח את הודעת השגיאה (ללא UI operations)
+                                sendGroupMessageSafely(errorMessage, currentGroupId);
+                                
+                                // Show error status
+                                showMessageStatus("Error sending message: " + ex.getMessage(), false);
 
                                 currentUI.push();
                             });
@@ -637,7 +773,6 @@ public Chatpage(ChatService chatService) {
                 });
     });
 }
-
 
     private void setupCrossBrowserCommunication() {
         UI ui = UI.getCurrent();
@@ -755,47 +890,47 @@ public Chatpage(ChatService chatService) {
     }
 
     private String initializeSessionId() {
-    VaadinSession session = VaadinSession.getCurrent();
-    String uniqueId;
+        VaadinSession session = VaadinSession.getCurrent();
+        String uniqueId;
 
-    User currentUser = UserService.getAuthenticatedUser();
-    if (currentUser != null) {
-        uniqueId = currentUser.getFullName();
-        session.setAttribute("sessionId", uniqueId);
+        User currentUser = UserService.getAuthenticatedUser();
+        if (currentUser != null) {
+            uniqueId = currentUser.getFullName();
+            session.setAttribute("sessionId", uniqueId);
+
+            UI.getCurrent().getPage().executeJs(
+                    "localStorage.setItem('chat-session-id', $0);", uniqueId);
+
+            updateSessionIdDisplay(uniqueId);
+
+            return uniqueId;
+        }
 
         UI.getCurrent().getPage().executeJs(
-                "localStorage.setItem('chat-session-id', $0);", uniqueId);
+                "return localStorage.getItem('chat-session-id');")
+                .then(String.class, result -> {
+                    if (result != null && !result.isEmpty()) {
+                        session.setAttribute("sessionId", result);
 
-        updateSessionIdDisplay(uniqueId);
+                        updateSessionIdDisplay(result);
+                        this.sessionId = result;
+                    }
+                });
+
+        if (session.getAttribute("sessionId") == null) {
+            uniqueId = "Guest-" + UUID.randomUUID().toString().substring(0, 8);
+            session.setAttribute("sessionId", uniqueId);
+
+            UI.getCurrent().getPage().executeJs(
+                    "localStorage.setItem('chat-session-id', $0);", uniqueId);
+
+            return uniqueId;
+        } else {
+            uniqueId = session.getAttribute("sessionId").toString();
+        }
 
         return uniqueId;
     }
-
-    UI.getCurrent().getPage().executeJs(
-            "return localStorage.getItem('chat-session-id');")
-            .then(String.class, result -> {
-                if (result != null && !result.isEmpty()) {
-                    session.setAttribute("sessionId", result);
-
-                    updateSessionIdDisplay(result);
-                    this.sessionId = result;
-                }
-            });
-
-    if (session.getAttribute("sessionId") == null) {
-        uniqueId = "Guest-" + UUID.randomUUID().toString().substring(0, 8);
-        session.setAttribute("sessionId", uniqueId);
-
-        UI.getCurrent().getPage().executeJs(
-                "localStorage.setItem('chat-session-id', $0);", uniqueId);
-
-        return uniqueId;
-    } else {
-        uniqueId = session.getAttribute("sessionId").toString();
-    }
-
-    return uniqueId;
-}
 
     private void updateSessionIdDisplay(String id) {
         // Update just the user's name without group name
@@ -806,165 +941,209 @@ public Chatpage(ChatService chatService) {
         });
     }
 
-   private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
-        // Create an upload button with an icon and text for better clarity
-        Button uploadButton = new Button("Upload", new Icon(VaadinIcon.UPLOAD));
-        uploadButton.getElement().setAttribute("aria-label", "Upload media");
-        uploadButton.getStyle().set("cursor", "pointer");
+    private void configureMediaUpload(Upload upload, MemoryBuffer buffer) {
+    // Create an upload button with an icon and text for better clarity
+    Button uploadButton = new Button("Upload", new Icon(VaadinIcon.UPLOAD));
+    uploadButton.getElement().setAttribute("aria-label", "Upload media");
+    uploadButton.getStyle().set("cursor", "pointer");
+    uploadButton.getStyle().set("background-color", "#e0e0e0");
+    uploadButton.getStyle().set("border", "1px solid #ccc");
+    uploadButton.getStyle().set("border-radius", "4px");
+    uploadButton.getStyle().set("padding", "6px 12px");
+    uploadButton.getStyle().set("color", "#333");
+    uploadButton.getStyle().set("font-weight", "normal");
+    uploadButton.getStyle().set("margin", "0 4px");
+
+    // Add hover effect for better UX
+    uploadButton.getElement().addEventListener("mouseover", event -> {
+        uploadButton.getStyle().set("background-color", "#d0d0d0");
+    });
+
+    uploadButton.getElement().addEventListener("mouseout", event -> {
         uploadButton.getStyle().set("background-color", "#e0e0e0");
-        uploadButton.getStyle().set("border", "1px solid #ccc");
-        uploadButton.getStyle().set("border-radius", "4px");
-        uploadButton.getStyle().set("padding", "6px 12px");
-        uploadButton.getStyle().set("color", "#333");
-        uploadButton.getStyle().set("font-weight", "normal");
-        uploadButton.getStyle().set("margin", "0 4px");
+    });
 
-        // Add hover effect for better UX
-        uploadButton.getElement().addEventListener("mouseover", event -> {
-            uploadButton.getStyle().set("background-color", "#d0d0d0");
-        });
+    // Set the button as the upload button
+    upload.setUploadButton(uploadButton);
 
-        uploadButton.getElement().addEventListener("mouseout", event -> {
-            uploadButton.getStyle().set("background-color", "#e0e0e0");
-        });
+    // Hide all the default upload components - we only want our custom button
+    upload.getElement().getStyle().set("display", "inline-block");
+    upload.getElement().getStyle().set("margin", "0");
+    upload.getElement().getStyle().set("padding", "0");
+    upload.getElement().getStyle().set("background", "transparent");
+    upload.getElement().getStyle().set("min-height", "auto");
 
-        // Set the button as the upload button
-        upload.setUploadButton(uploadButton);
+    // Only show the button, hide everything else
+    upload.getElement().executeJs(
+            "this.querySelector('vaadin-upload-file-list').style.display = 'none';" +
+                    "this.shadowRoot.querySelector('[part=\"drop-label\"]').style.display = 'none';");
 
-        // Hide all the default upload components - we only want our custom button
-        upload.getElement().getStyle().set("display", "inline-block");
-        upload.getElement().getStyle().set("margin", "0");
-        upload.getElement().getStyle().set("padding", "0");
-        upload.getElement().getStyle().set("background", "transparent");
-        upload.getElement().getStyle().set("min-height", "auto");
+    upload.setAcceptedFileTypes("image/*", "audio/*");
+    upload.setMaxFileSize(16 * 1024 * 1024); // 16 MB
 
-        // Only show the button, hide everything else
+    // Add tooltip to explain what the button does
+    Tooltip.forComponent(uploadButton).withText("Upload an image or audio")
+            .withPosition(Tooltip.TooltipPosition.TOP);
+
+    // Helper method to clear upload component completely
+    Runnable clearUpload = () -> {
         upload.getElement().executeJs(
-                "this.querySelector('vaadin-upload-file-list').style.display = 'none';" +
-                        "this.shadowRoot.querySelector('[part=\"drop-label\"]').style.display = 'none';");
+            "this.files = []; " +
+            "this.shadowRoot.querySelector('input[type=\"file\"]').value = ''; " +
+            "this.requestUpdate();"
+        );
+        upload.clearFileList();
+        // Force button to be enabled again
+        uploadButton.setEnabled(true);
+    };
 
-        upload.setAcceptedFileTypes("image/*", "audio/*");
-        upload.setMaxFileSize(16 * 1024 * 1024); // 16 MB
-
-        // Add tooltip to explain what the button does
-       Tooltip.forComponent(uploadButton).withText("Upload an image or audio")
-                .withPosition(Tooltip.TooltipPosition.TOP);
-
-        // Add handlers for upload events
-        upload.addSucceededListener(event -> {
-            if (currentGroupId == null) {
-                Notification.show("selcte group", 2000, Notification.Position.MIDDLE);
-                return;
-            }
-
-            UI ui = UI.getCurrent();
-            VaadinSession session = VaadinSession.getCurrent();
-
-            User currentUser = UserService.getAuthenticatedUser();
-            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-            String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
-
-            String fileName = event.getFileName();
-            String mimeType = event.getMIMEType();
-            try {
-                InputStream inputStream = buffer.getInputStream();
-                byte[] fileData = inputStream.readAllBytes();
-                String base64Data = Base64.getEncoder().encodeToString(fileData);
-                String timestamp = dateFormat.format(new Date());
-
-                String mediaType = mimeType.startsWith("image/") ? "IMAGE" : "SOUND";
-                Message mediaMessage = new Message(senderId, currentGroupId, null, fileData, mediaType, currentGroupId);
-                messageRepository.save(mediaMessage);
-
-                if (mimeType.startsWith("image/")) {
-                    String imageHtml = "[" + timestamp + "] " + displayName + " <b>[תמונה]</b>:<br>" +
-                            "<img src='data:" + mimeType + ";base64," + base64Data +
-                            "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
-                    sendGroupMessage(imageHtml, currentGroupId);
-                } else if (mimeType.startsWith("audio/")) {
-                    String audioHtml = "[" + timestamp + "] " + displayName + " <b>[אודיו]</b>:<br>" +
-                            "<audio controls><source src='data:" + mimeType + ";base64," +
-                            base64Data + "' type='" + mimeType + "'></audio>";
-                    sendGroupMessage(audioHtml, currentGroupId);
-                }
-
-                final byte[] finalFileData = fileData;
-                encryptionService.encryptAsync(finalFileData)
-                        .thenAccept(encryptedData -> {
-                            if (ui.isAttached() && !session.getSession().isNew()) {
-                                session.lock();
-                                try {
-                                    ui.access(() -> {
-                                        String encTimestamp = dateFormat.format(new Date());
-                                        String successMessage = "[" + encTimestamp + "] " + displayName +
-                                                " <b>[File Encrypted]</b>:<br>The file " + fileName
-                                                + " encrypted successfully";
-
-                                        sendGroupMessage(successMessage, currentGroupId);
-
-                                        ui.push();
-                                    });
-                                } finally {
-                                    session.unlock();
-                                }
-                            }
-                        })
-                        .exceptionally(ex -> {
-                            if (ui.isAttached() && !session.getSession().isNew()) {
-                                session.lock();
-                                try {
-                                    ui.access(() -> {
-                                        String errorTimestamp = dateFormat.format(new Date());
-                                        String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                                " <b>[Error]</b>:<br>Error encrypting file: " + ex.getMessage();
-
-                                        sendGroupMessage(errorMessage, currentGroupId);
-
-                                        ui.push();
-                                    });
-                                } finally {
-                                    session.unlock();
-                                }
-                            }
-                            return null;
-                        });
-            } catch (IOException e) {
-                String errorTimestamp = dateFormat.format(new Date());
-                String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                        " <b>[Error]</b>:<br>Error processing file: " + e.getMessage();
-
-                sendGroupMessage(errorMessage, currentGroupId);
-            }
-
-            // IMPORTANT: Clear the upload component to allow new uploads
-            upload.getElement().executeJs("this.files = []");
-        });
-
-        // Handle the file reject event
-        upload.addFileRejectedListener(event -> {
-            String errorMessage = event.getErrorMessage();
-            Notification.show("File rejected: " + errorMessage, 3000, Notification.Position.MIDDLE);
-
-            // Also clear the upload component after rejection
-            upload.getElement().executeJs("this.files = []");
-        });
+    upload.addSucceededListener(event -> {
+    if (currentGroupId == null) {
+        Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
+        clearUpload.run(); // Clear upload even on error
+        return;
     }
 
-    private void sendGroupMessage(String message, String groupId) {
-        if (groupId == null) {
-            System.err.println("Cannot send message: Group ID is null");
+    UI ui = UI.getCurrent();
+    VaadinSession session = VaadinSession.getCurrent();
+
+    User currentUser = UserService.getAuthenticatedUser();
+    String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+    String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
+
+    String fileName = event.getFileName();
+    String mimeType = event.getMIMEType();
+    try {
+        InputStream inputStream = buffer.getInputStream();
+        byte[] fileData = inputStream.readAllBytes();
+        String base64Data = Base64.getEncoder().encodeToString(fileData);
+        String timestamp = dateFormat.format(new Date());
+
+        String mediaType = mimeType.startsWith("image/") ? "IMAGE" : "SOUND";
+        Message mediaMessage = new Message(senderId, currentGroupId, null, fileData, mediaType, currentGroupId);
+        messageRepository.save(mediaMessage);
+
+        String mediaHtml;
+        if (mimeType.startsWith("image/")) {
+            mediaHtml = "[" + timestamp + "] " + displayName + " <b>[תמונה]</b>:<br>" +
+                    "<img src='data:" + mimeType + ";base64," + base64Data +
+                    "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
+        } else if (mimeType.startsWith("audio/")) {
+            mediaHtml = "[" + timestamp + "] " + displayName + " <b>[אודיו]</b>:<br>" +
+                    "<audio controls><source src='data:" + mimeType + ";base64," +
+                    base64Data + "' type='" + mimeType + "'></audio>";
+        } else {
+            clearUpload.run(); // Clear upload for unsupported files
             return;
         }
 
-        addMessageToDatabase(message, groupId);
+        // הוסף את המדיה מיד לצ'אט של השולח
+        addMessageToChat(mediaHtml);
+        
+        // שלח את המדיה למשתמשים אחרים (ללא UI operations)
+        sendGroupMessageSafely(mediaHtml, currentGroupId);
 
-        GlobalMessageBroadcaster.broadcastToGroup(message, groupId);
+        final byte[] finalFileData = fileData;
+        encryptionService.encryptAsync(finalFileData)
+                .thenAccept(encryptedData -> {
+                    if (ui.isAttached() && !session.getSession().isNew()) {
+                        session.lock();
+                        try {
+                            ui.access(() -> {
+                                String encTimestamp = dateFormat.format(new Date());
+                                String successMessage = "[" + encTimestamp + "] " + displayName +
+                                        " <b>[File Encrypted]</b>:<br>The file " + fileName
+                                        + " encrypted successfully";
 
-        UI.getCurrent().getPage().executeJs("window.notifyOtherWindows();");
+                                // הוסף את הודעת ההצפנה מיד לצ'ט של השולח
+                                addMessageToChat(successMessage);
+                                
+                                // שלח את הודעת ההצפנה למשתמשים אחרים (ללא UI operations)
+                                sendGroupMessageSafely(successMessage, currentGroupId);
+
+                                ui.push();
+                            });
+                        } finally {
+                            session.unlock();
+                        }
+                    }
+                })
+                .exceptionally(ex -> {
+                    if (ui.isAttached() && !session.getSession().isNew()) {
+                        session.lock();
+                        try {
+                            ui.access(() -> {
+                                String errorTimestamp = dateFormat.format(new Date());
+                                String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                                        " <b>[Error]</b>:<br>Error encrypting file: " + ex.getMessage();
+
+                                // הוסף את הודעת השגיאה מיד לצ'אט של השולח
+                                addMessageToChat(errorMessage);
+                                
+                                // שלח את הודעת השגיאה למשתמשים אחרים (ללא UI operations)
+                                sendGroupMessageSafely(errorMessage, currentGroupId);
+
+                                ui.push();
+                            });
+                        } finally {
+                            session.unlock();
+                        }
+                    }
+                    return null;
+                });
+    } catch (IOException e) {
+        String errorTimestamp = dateFormat.format(new Date());
+        String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                " <b>[Error]</b>:<br>Error processing file: " + e.getMessage();
+
+        // הוסף את הודעת השגיאה מיד לצ'אט של השולח
+        addMessageToChat(errorMessage);
+        
+        // שלח את הודעת השגיאה למשתמשים אחרים (ללא UI operations)
+        sendGroupMessageSafely(errorMessage, currentGroupId);
     }
- 
-    
 
+    // נקה את רכיב ההעלאה בצורה יסודית לאפשר העלאות חדשות
+    clearUpload.run();
+});
+}
+private void sendGroupMessageSafely(String message, String groupId) {
+    if (groupId == null) {
+        System.err.println("Cannot send message: Group ID is null");
+        return;
+    }
+
+    // שמור הודעה בבסיס הנתונים
+    addMessageToDatabase(message, groupId);
+
+    // שלח הודעה למשתמשים אחרים (ללא UI operations)
+    GlobalMessageBroadcaster.broadcastToGroup(message, groupId);
+
+    // עדכן lastSeenMessageCount כי הוספנו הודעה חדשה
+    if (chatService != null) {
+        List<String> allMessages = chatService.getGroupMessages(groupId);
+        lastSeenMessageCount = allMessages.size();
+    }
+
+    // עדכן לוקל סטורג' לכרטיסיות אחרות - עשה זאת בצורה בטוחה
+    UI currentUI = UI.getCurrent();
+    VaadinSession currentSession = VaadinSession.getCurrent();
+    
+    if (currentUI != null && currentUI.isAttached() && currentSession != null) {
+        try {
+            currentSession.lock();
+            try {
+                currentUI.access(() -> {
+                    currentUI.getPage().executeJs("window.notifyOtherWindows && window.notifyOtherWindows();");
+                });
+            } finally {
+                currentSession.unlock();
+            }
+        } catch (Exception e) {
+            System.err.println("Error executing JavaScript: " + e.getMessage());
+        }
+    }
+}
     private void scrollToBottom() {
         UI.getCurrent().getPage().executeJs(
                 "setTimeout(function() { "
@@ -975,72 +1154,84 @@ public Chatpage(ChatService chatService) {
                         + "}, 100);");
     }
 
-   private void preloadMessagesForGroup(String groupId) {
+    private void preloadMessagesForGroup(String groupId) {
         if (groupId != null && chatService != null) {
             chatService.getGroupMessages(groupId);
         }
     }
-    private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
-        try {
-            byte[] encryptedBytes = Base64.getDecoder().decode(encodedMessage);
 
-            UI ui = UI.getCurrent();
-            VaadinSession session = VaadinSession.getCurrent();
+   private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
+    try {
+        byte[] encryptedBytes = Base64.getDecoder().decode(encodedMessage);
 
-            User currentUser = UserService.getAuthenticatedUser();
-            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+        UI ui = UI.getCurrent();
+        VaadinSession session = VaadinSession.getCurrent();
 
-            encryptionService.decryptAsync(encryptedBytes)
-                    .thenAccept(decryptedBytes -> {
-                        if (ui.isAttached() && !session.getSession().isNew()) {
-                            session.lock();
-                            try {
-                                ui.access(() -> {
-                                    String decTimestamp = dateFormat.format(new Date());
-                                    String decryptedText = new String(decryptedBytes, StandardCharsets.UTF_8);
-                                    String decryptedMessage = "[" + decTimestamp + "] " + displayName +
-                                            " <b>[Decrypted]</b>:<br>" + decryptedText;
+        User currentUser = UserService.getAuthenticatedUser();
+        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
 
-                                    sendGroupMessage(decryptedMessage, groupId);
+        encryptionService.decryptAsync(encryptedBytes)
+                .thenAccept(decryptedBytes -> {
+                    if (ui.isAttached() && !session.getSession().isNew()) {
+                        session.lock();
+                        try {
+                            ui.access(() -> {
+                                String decTimestamp = dateFormat.format(new Date());
+                                String decryptedText = new String(decryptedBytes, StandardCharsets.UTF_8);
+                                String decryptedMessage = "[" + decTimestamp + "] " + displayName +
+                                        " <b>[Decrypted]</b>:<br>" + decryptedText;
 
-                                    ui.push();
-                                });
-                            } finally {
-                                session.unlock();
-                            }
+                                // הוסף את ההודעה הפענוחה לצ'אט המקומי
+                                addMessageToChat(decryptedMessage);
+                                
+                                // שלח את ההודעה הפענוחה (ללא UI operations)
+                                sendGroupMessageSafely(decryptedMessage, groupId);
+
+                                ui.push();
+                            });
+                        } finally {
+                            session.unlock();
                         }
-                    })
-                    .exceptionally(ex -> {
-                        if (ui.isAttached() && !session.getSession().isNew()) {
-                            session.lock();
-                            try {
-                                ui.access(() -> {
-                                    String errorTimestamp = dateFormat.format(new Date());
-                                    String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                            " <b>[Error]</b>:<br>Error decrypting message: " + ex.getMessage();
+                    }
+                })
+                .exceptionally(ex -> {
+                    if (ui.isAttached() && !session.getSession().isNew()) {
+                        session.lock();
+                        try {
+                            ui.access(() -> {
+                                String errorTimestamp = dateFormat.format(new Date());
+                                String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                                        " <b>[Error]</b>:<br>Error decrypting message: " + ex.getMessage();
 
-                                    sendGroupMessage(errorMessage, groupId);
+                                // הוסף את הודעת השגיאה לצ'אט המקומי
+                                addMessageToChat(errorMessage);
+                                
+                                // שלח את הודעת השגיאה (ללא UI operations)
+                                sendGroupMessageSafely(errorMessage, groupId);
 
-                                    ui.push();
-                                });
-                            } finally {
-                                session.unlock();
-                            }
+                                ui.push();
+                            });
+                        } finally {
+                            session.unlock();
                         }
-                        return null;
-                    });
-        } catch (IllegalArgumentException e) {
-            String errorTimestamp = dateFormat.format(new Date());
-            User currentUser = UserService.getAuthenticatedUser();
-            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+                    }
+                    return null;
+                });
+    } catch (IllegalArgumentException e) {
+        String errorTimestamp = dateFormat.format(new Date());
+        User currentUser = UserService.getAuthenticatedUser();
+        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
 
-            String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                    " <b>[Error]</b>:<br>Error decoding Base64: " + e.getMessage();
+        String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                " <b>[Error]</b>:<br>Error decoding Base64: " + e.getMessage();
 
-            sendGroupMessage(errorMessage, groupId);
-        }
+        // הוסף את הודעת השגיאה לצ'אט המקומי
+        addMessageToChat(errorMessage);
+        
+        // שלח את הודעת השגיאה (ללא UI operations)
+        sendGroupMessageSafely(errorMessage, groupId);
     }
-
+}
     private Aes256 initializeEncryption() {
         try {
             byte[] key = new byte[32];
@@ -1058,38 +1249,54 @@ public Chatpage(ChatService chatService) {
         }
     }
 
- private void updateUserList() {
-        if (currentGroupId == null) {
-            userListContainer.setVisible(false);
-            return;
-        }
+private void updateUserList() {
+    if (currentGroupId == null) {
+        userListContainer.setVisible(false);
+        return;
+    }
 
-        userListContainer.setVisible(true);
-        userListContainer.removeAll();
+    userListContainer.setVisible(true);
+    userListContainer.removeAll();
 
-        Group currentGroup = GroupService.getGroupById(currentGroupId);
-        if (currentGroup == null || currentGroup.getUsers() == null || currentGroup.getUsers().isEmpty()) {
-            userListContainer.add(new Span("No members in this group"));
-            return;
-        }
+    Group currentGroup = GroupService.getGroupById(currentGroupId);
+    if (currentGroup == null || currentGroup.getUsers() == null || currentGroup.getUsers().isEmpty()) {
+        userListContainer.add(new Span("No members in this group"));
+        return;
+    }
 
-        // Create header and members layout
-        HorizontalLayout headerAndMembersLayout = new HorizontalLayout();
-        headerAndMembersLayout.setWidthFull();
-        headerAndMembersLayout.setJustifyContentMode(JustifyContentMode.BETWEEN);
-        headerAndMembersLayout.setAlignItems(Alignment.CENTER);
+    // Get current user to exclude from the list
+    User currentUser = UserService.getAuthenticatedUser();
+    String currentUserEmail = (currentUser != null) ? currentUser.getEmail() : null;
 
-        // Group Members header
-        H3 groupMembersHeader = new H3("Group Members (" + currentGroup.getUsers().size() + ")");
-        groupMembersHeader.getStyle().set("margin", "0");
-        
-        // Members container
-        HorizontalLayout membersLayout = new HorizontalLayout();
-        membersLayout.getStyle().set("flex-wrap", "wrap");
-        membersLayout.setAlignItems(Alignment.CENTER);
+    // Filter out the current user from the members list
+    List<String> otherMembers = currentGroup.getUsers().stream()
+        .filter(memberEmail -> !memberEmail.equals(currentUserEmail))
+        .collect(Collectors.toList());
 
-        // Add members without online status
-        for (String memberEmail : currentGroup.getUsers()) {
+    // Create header and members layout
+    HorizontalLayout headerAndMembersLayout = new HorizontalLayout();
+    headerAndMembersLayout.setWidthFull();
+    headerAndMembersLayout.setJustifyContentMode(JustifyContentMode.BETWEEN);
+    headerAndMembersLayout.setAlignItems(Alignment.CENTER);
+
+    // Group Members header - show count of other members only
+    H3 groupMembersHeader = new H3("Group Members (" + otherMembers.size() + ")");
+    groupMembersHeader.getStyle().set("margin", "0");
+    
+    // Members container
+    HorizontalLayout membersLayout = new HorizontalLayout();
+    membersLayout.getStyle().set("flex-wrap", "wrap");
+    membersLayout.setAlignItems(Alignment.CENTER);
+
+    // Add other members (excluding current user)
+    if (otherMembers.isEmpty()) {
+        Span noOtherMembersSpan = new Span("Only you in this group");
+        noOtherMembersSpan.getStyle()
+            .set("color", "#666")
+            .set("font-style", "italic");
+        membersLayout.add(noOtherMembersSpan);
+    } else {
+        for (String memberEmail : otherMembers) {
             User member = UserService.getUserByEmail(memberEmail);
             if (member != null) {
                 Div memberDiv = new Div();
@@ -1115,81 +1322,89 @@ public Chatpage(ChatService chatService) {
                 membersLayout.add(memberDiv);
             }
         }
-
-        headerAndMembersLayout.add(groupMembersHeader, membersLayout);
-        userListContainer.add(headerAndMembersLayout);
     }
 
-    private void createNewGroup() {
-        Dialog dialog = new Dialog();
-        dialog.setWidth("400px");
+    headerAndMembersLayout.add(groupMembersHeader, membersLayout);
+    userListContainer.add(headerAndMembersLayout);
+}
 
-        VerticalLayout dialogLayout = new VerticalLayout();
-        dialogLayout.setPadding(true);
-        dialogLayout.setSpacing(true);
+  private void createNewGroup() {
+    Dialog dialog = new Dialog();
+    dialog.setWidth("400px");
 
-        H3 title = new H3("Create New Group");
+    VerticalLayout dialogLayout = new VerticalLayout();
+    dialogLayout.setPadding(true);
+    dialogLayout.setSpacing(true);
 
-        // Group name field
-        TextField groupNameField = new TextField("Group Name");
-        groupNameField.setWidthFull();
-        groupNameField.setRequired(true);
+    H3 title = new H3("Create New Group");
 
-        // Create a multi-select combo box for users
-        List<User> allUsers = UserService.getAllUsers();
+    // Group name field
+    TextField groupNameField = new TextField("Group Name");
+    groupNameField.setWidthFull();
+    groupNameField.setRequired(true);
 
-        MultiSelectComboBox<User> userSelector = new MultiSelectComboBox<>("Add Members");
-        userSelector.setItems(allUsers);
-        userSelector.setItemLabelGenerator(User::getFullName);
-        userSelector.setWidthFull();
+    // Create a multi-select combo box for users
+    List<User> allUsers = UserService.getAllUsers();
+    User currentUser = UserService.getAuthenticatedUser();
+    
+    // Filter out the current user from the list
+    List<User> availableUsers = allUsers.stream()
+            .filter(user -> !user.getEmail().equals(currentUser.getEmail()))
+            .collect(Collectors.toList());
 
-        Button cancelButton = new Button("Cancel", e -> dialog.close());
-        Button createButton = new Button("Create", e -> {
-            String groupName = groupNameField.getValue().trim();
-            if (groupName.isEmpty()) {
-                Notification.show("Please enter a group name", 2000, Notification.Position.MIDDLE);
-                return;
-            }
+    MultiSelectComboBox<User> userSelector = new MultiSelectComboBox<>("Add Members");
+    userSelector.setItems(availableUsers);
+    userSelector.setItemLabelGenerator(User::getFullName);
+    userSelector.setWidthFull();
 
-            User currentUser = UserService.getAuthenticatedUser();
-            if (currentUser == null) {
-                Notification.show("You must be logged in to create a group", 2000, Notification.Position.MIDDLE);
-                dialog.close();
-                return;
-            }
+    Button cancelButton = new Button("Cancel", e -> dialog.close());
+    Button createButton = new Button("Create", e -> {
+        String groupName = groupNameField.getValue().trim();
+        if (groupName.isEmpty()) {
+            Notification.show("Please enter a group name", 2000, Notification.Position.MIDDLE);
+            return;
+        }
 
-            // Create the new group
-            Group newGroup = GroupService.createGroup(groupName, currentUser.getEmail());
-
-            // Add selected users
-            Set<User> selectedUsers = userSelector.getValue();
-            for (User user : selectedUsers) {
-                GroupService.addUserToGroup(user.getEmail(), newGroup.getId());
-            }
-
-            // Update the group selector
-            updateGroupSelector();
-
-            // Select the new group
-            if (newGroup != null) {
-                groupSelector.setValue(newGroup);
-                currentGroupId = newGroup.getId();
-                loadExistingMessages();
-                updateUserList();
-            }
-
-            Notification.show("Group created: " + groupName, 2000, Notification.Position.BOTTOM_CENTER);
+        if (currentUser == null) {
+            Notification.show("You must be logged in to create a group", 2000, Notification.Position.MIDDLE);
             dialog.close();
-        });
+            return;
+        }
 
-        HorizontalLayout buttonLayout = new HorizontalLayout(cancelButton, createButton);
-        buttonLayout.setJustifyContentMode(JustifyContentMode.END);
-        buttonLayout.setWidthFull();
+        // Create the new group
+        Group newGroup = GroupService.createGroup(groupName, currentUser.getEmail());
 
-        dialogLayout.add(title, groupNameField, userSelector, buttonLayout);
-        dialog.add(dialogLayout);
-        dialog.open();
-    }
+        // Add selected users
+        Set<User> selectedUsers = userSelector.getValue();
+        for (User user : selectedUsers) {
+            GroupService.addUserToGroup(user.getEmail(), newGroup.getId());
+        }
+
+        // Update the group selector
+        updateGroupSelector();
+
+        // Select the new group
+        if (newGroup != null) {
+            groupSelector.setValue(newGroup);
+            currentGroupId = newGroup.getId();
+            loadExistingMessages();
+            updateUserList();
+        }
+
+        Notification.show("Group created: " + groupName, 2000, Notification.Position.BOTTOM_CENTER);
+        dialog.close();
+    });
+
+    HorizontalLayout buttonLayout = new HorizontalLayout(cancelButton, createButton);
+    buttonLayout.setJustifyContentMode(JustifyContentMode.END);
+    buttonLayout.setWidthFull();
+
+    dialogLayout.add(title, groupNameField, userSelector, buttonLayout);
+    dialog.add(dialogLayout);
+    dialog.open();
+}
+
+
 
     private void updateGroupSelector() {
         User currentUser = UserService.getAuthenticatedUser();

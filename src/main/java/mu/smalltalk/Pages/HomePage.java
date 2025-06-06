@@ -56,8 +56,8 @@ public class HomePage extends VerticalLayout {
         setSizeFull();
         getStyle().set("background-color", "#f5f7fa");
         
-        // Navigation bar עם משפט
-        HorizontalLayout navbar = createNavigationBarWithQuote();
+        // Navigation bar
+        HorizontalLayout navbar = createNavigationBar();
         
         // Hero section
         Div heroSection = createHeroSection();
@@ -76,9 +76,12 @@ public class HomePage extends VerticalLayout {
         
         // Add all components to the main layout
         add(navbar, heroSection, featuresSection, securitySection, technologySection, footer);
+        
+        // הגדרת טיימר לעדכון משפט כל 10 דקות
+        setupAutoRefresh();
     }
     
-    private HorizontalLayout createNavigationBarWithQuote() {
+    private HorizontalLayout createNavigationBar() {
         HorizontalLayout navbar = new HorizontalLayout();
         navbar.setWidthFull();
         navbar.setHeight("80px");
@@ -92,12 +95,10 @@ public class HomePage extends VerticalLayout {
             .set("top", "0")
             .set("z-index", "1000");
         
-        // חלק שמאל - לוגו + משפט חיזוק
+        // חלק שמאל - לוגו
         HorizontalLayout leftSection = new HorizontalLayout();
         leftSection.setAlignItems(Alignment.CENTER);
         leftSection.setSpacing(true);
-        leftSection.setWidthFull();
-        leftSection.setFlexGrow(1);
         
         // לוגו עם טקסט
         HorizontalLayout logoContainer = new HorizontalLayout();
@@ -121,53 +122,7 @@ public class HomePage extends VerticalLayout {
         logoContainer.add(logo, logoText);
         logoContainer.addClickListener(e -> logoContainer.getUI().ifPresent(ui -> ui.navigate("")));
         
-        // מיכל למשפט חיזוק
-        quoteContainer = new Div();
-        quoteContainer.getStyle()
-            .set("margin-left", "40px")
-            .set("padding", "8px 16px")
-            .set("background-color", "#f0f8ff")
-            .set("border-radius", "8px")
-            .set("border-left", "3px solid #2a5885")
-            .set("max-width", "400px")
-            .set("font-size", "14px")
-            .set("line-height", "1.4")
-            .set("transition", "all 0.3s ease");
-        
-        // טעינת משפט ראשוני
-        loadNewQuote();
-        
-        // כפתור רענון מעוצב
-        Button refreshButton = new Button("🔄");
-        refreshButton.getStyle()
-            .set("background-color", "#2a5885")
-            .set("color", "white")
-            .set("border", "none")
-            .set("cursor", "pointer")
-            .set("padding", "8px 12px")
-            .set("margin-left", "12px")
-            .set("border-radius", "6px")
-            .set("font-size", "16px")
-            .set("transition", "all 0.3s ease")
-            .set("box-shadow", "0 2px 4px rgba(42, 88, 133, 0.3)");
-        
-        refreshButton.addClickListener(e -> {
-            // אפקט חזותי של טעינה
-            refreshButton.setText("⏳");
-            loadNewQuote();
-            // החזרת האייקון אחרי זמן קצר
-            getUI().ifPresent(ui -> {
-                Timer timer = new Timer();
-                timer.schedule(new TimerTask() {
-                    @Override
-                    public void run() {
-                        ui.access(() -> refreshButton.setText("🔄"));
-                    }
-                }, 500);
-            });
-        });
-        
-        leftSection.add(logoContainer, quoteContainer, refreshButton);
+        leftSection.add(logoContainer);
         
         // חלק ימין - תפריט ניווט
         HorizontalLayout navLinks = new HorizontalLayout();
@@ -179,14 +134,13 @@ public class HomePage extends VerticalLayout {
 
         Anchor chatlink = new Anchor("chat", "Chat");
         Anchor loginLink = new Anchor("login", "Login");
-        Anchor logoutLink = new Anchor("logout", "Logout");
         Anchor signupLink = new Anchor("signup", "Signup");
         Anchor featuresLink = new Anchor("#features", "Features");
         Anchor securityLink = new Anchor("#security", "Security");
         Anchor techLink = new Anchor("#technology", "Technology");
         Anchor aboutLink = new Anchor("#about", "About");
         
-        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, logoutLink, signupLink);
+        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, signupLink);
         
         // Style all links
         for (int i = 0; i < navLinks.getComponentCount(); i++) {
@@ -205,83 +159,7 @@ public class HomePage extends VerticalLayout {
         
         navbar.add(leftSection, navLinks);
         
-        // הגדרת טיימר לעדכון משפט כל 10 דקות
-        setupAutoRefresh();
-        
         return navbar;
-    }
-    
-    private void loadNewQuote() {
-        if (quoteContainer == null) return;
-        
-        try {
-            String selectedQuote;
-            
-            // ניסיון לטעון מהשירות, אם יש
-            if (quoteService != null) {
-                try {
-                    QuoteService.Quote serviceQuote = quoteService.getRandomMotivationalQuote();
-                    selectedQuote = "💡 \"" + serviceQuote.getText() + "\" - " + serviceQuote.getAuthor();
-                } catch (Exception e) {
-                    // אם השירות לא זמין, נשתמש ברשימה המקומית
-                    selectedQuote = getRandomLocalQuote();
-                }
-            } else {
-                // אם אין שירות, נשתמש ברשימה המקומית
-                selectedQuote = getRandomLocalQuote();
-            }
-            
-            updateQuoteDisplay(selectedQuote);
-            
-        } catch (Exception e) {
-            // במקרה של שגיאה כללית
-            updateQuoteDisplay("💡 \"כל יום הוא הזדמנות חדשה לגדול!\" 🌱");
-        }
-    }
-    
-    private String getRandomLocalQuote() {
-        int randomIndex = random.nextInt(motivationalQuotes.size());
-        return "💡 " + motivationalQuotes.get(randomIndex);
-    }
-    
-    private void updateQuoteDisplay(String quoteText) {
-        if (quoteContainer == null) return;
-        
-        quoteContainer.removeAll();
-        
-        // קיצור משפט אם הוא ארוך מדי
-        String displayText = quoteText.length() > 80 ? 
-            quoteText.substring(0, 77) + "..." : 
-            quoteText;
-        
-        Div quoteDiv = new Div(displayText);
-        quoteDiv.getStyle()
-            .set("color", "#2a5885")
-            .set("font-weight", "500")
-            .set("margin", "0")
-            .set("animation", "fadeIn 0.5s ease-in");
-        
-        quoteContainer.add(quoteDiv);
-    }
-    
-    private void setupAutoRefresh() {
-        // טיימר שמתעדכן כל 10 דקות (600000 מילישניות)
-        quoteTimer = new Timer();
-        quoteTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                getUI().ifPresent(ui -> ui.access(() -> loadNewQuote()));
-            }
-        }, 600000, 600000); // כל 10 דקות
-    }
-    
-    @Override
-    protected void onDetach(DetachEvent detachEvent) {
-        super.onDetach(detachEvent);
-        // ניקוי הטיימר כשהדף נסגר
-        if (quoteTimer != null) {
-            quoteTimer.cancel();
-        }
     }
     
     private Div createHeroSection() {
@@ -331,9 +209,55 @@ public class HomePage extends VerticalLayout {
             .set("text-decoration", "none")
             .set("display", "inline-block")
             .set("transition", "background-color 0.3s")
-            .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)");
+            .set("box-shadow", "0 2px 4px rgba(0, 0, 0, 0.1)")
+            .set("margin-bottom", "32px");
         
-        heroSection.add(title, logoImage, subtitle, description, ctaButton);
+        // מיכל למשפט חיזוק
+        quoteContainer = new Div();
+        quoteContainer.getStyle()
+            .set("background-color", "rgba(255, 255, 255, 0.1)")
+            .set("border-radius", "12px")
+            .set("padding", "16px 24px")
+            .set("margin", "0 auto")
+            .set("max-width", "600px")
+            .set("backdrop-filter", "blur(10px)")
+            .set("border", "1px solid rgba(255, 255, 255, 0.2)")
+            .set("box-shadow", "0 4px 6px rgba(0, 0, 0, 0.1)");
+        
+        // טעינת משפט ראשוני
+        loadNewQuote();
+        
+        // כפתור רענון מעוצב
+        Button refreshButton = new Button("🔄 משפט חדש");
+        refreshButton.getStyle()
+            .set("background-color", "rgba(255, 255, 255, 0.2)")
+            .set("color", "white")
+            .set("border", "1px solid rgba(255, 255, 255, 0.3)")
+            .set("cursor", "pointer")
+            .set("padding", "8px 16px")
+            .set("margin-top", "16px")
+            .set("border-radius", "8px")
+            .set("font-size", "14px")
+            .set("transition", "all 0.3s ease")
+            .set("backdrop-filter", "blur(5px)");
+        
+        refreshButton.addClickListener(e -> {
+            // אפקט חזותי של טעינה
+            refreshButton.setText("⏳ טוען...");
+            loadNewQuote();
+            // החזרת הטקסט אחרי זמן קצר
+            getUI().ifPresent(ui -> {
+                Timer timer = new Timer();
+                timer.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        ui.access(() -> refreshButton.setText("🔄 משפט חדש"));
+                    }
+                }, 500);
+            });
+        });
+        
+        heroSection.add(title, logoImage, subtitle, description, ctaButton, quoteContainer, refreshButton);
         return heroSection;
     }
     
@@ -555,6 +479,78 @@ public class HomePage extends VerticalLayout {
             .set("line-height", "1.5");
         
         box.add(boxTitle, boxContent);
+                
         return box;
+    }
+    
+    private void loadNewQuote() {
+        if (quoteContainer == null) return;
+        
+        try {
+            String selectedQuote;
+            
+            // ניסיון לטעון מהשירות, אם יש
+            if (quoteService != null) {
+                try {
+                    QuoteService.Quote serviceQuote = quoteService.getRandomMotivationalQuote();
+                    selectedQuote = "💡 \"" + serviceQuote.getText() + "\" - " + serviceQuote.getAuthor();
+                } catch (Exception e) {
+                    // אם השירות לא זמין, נשתמש ברשימה המקומית
+                    selectedQuote = getRandomLocalQuote();
+                }
+            } else {
+                // אם אין שירות, נשתמש ברשימה המקומית
+                selectedQuote = getRandomLocalQuote();
+            }
+            
+            updateQuoteDisplay(selectedQuote);
+            
+        } catch (Exception e) {
+            // במקרה של שגיאה כללית
+            updateQuoteDisplay("💡 \"כל יום הוא הזדמנות חדשה לגדול!\" 🌱");
+        }
+    }
+    
+    private String getRandomLocalQuote() {
+        int randomIndex = random.nextInt(motivationalQuotes.size());
+        return "💡 " + motivationalQuotes.get(randomIndex);
+    }
+    
+    private void updateQuoteDisplay(String quoteText) {
+        if (quoteContainer == null) return;
+        
+        quoteContainer.removeAll();
+        
+        Div quoteDiv = new Div(quoteText);
+        quoteDiv.getStyle()
+            .set("color", "white")
+            .set("font-weight", "500")
+            .set("margin", "0")
+            .set("text-align", "center")
+            .set("font-size", "16px")
+            .set("line-height", "1.5")
+            .set("animation", "fadeIn 0.5s ease-in");
+        
+        quoteContainer.add(quoteDiv);
+    }
+    
+    private void setupAutoRefresh() {
+        // טיימר שמתעדכן כל 10 דקות (600000 מילישניות)
+        quoteTimer = new Timer();
+        quoteTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                getUI().ifPresent(ui -> ui.access(() -> loadNewQuote()));
+            }
+        }, 600000, 600000); // כל 10 דקות
+    }
+    
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        super.onDetach(detachEvent);
+        // ניקוי הטיימר כשהדף נסגר
+        if (quoteTimer != null) {
+            quoteTimer.cancel();
+        }
     }
 }

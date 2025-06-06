@@ -116,14 +116,13 @@ public class LoginPage extends VerticalLayout {
         Anchor chatlink = new Anchor("chat", "Chat");
         Anchor loginLink = new Anchor("login", "Login");
         loginLink.getStyle().set("font-weight", "bold"); // Highlight the current page
-        Anchor logoutLink = new Anchor("logout", "Logout");
         Anchor signupLink = new Anchor("signup", "Signup");
         Anchor featuresLink = new Anchor("#features", "Features");
         Anchor securityLink = new Anchor("#security", "Security");
         Anchor techLink = new Anchor("#technology", "Technology");
         Anchor aboutLink = new Anchor("#about", "About");
         
-        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink, logoutLink, signupLink);
+        navLinks.add(homeLink, featuresLink, securityLink, techLink, aboutLink, chatlink, loginLink,  signupLink);
         
         // Style all links
         for (int i = 0; i < navLinks.getComponentCount(); i++) {
