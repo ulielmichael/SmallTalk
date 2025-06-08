@@ -16,7 +16,7 @@ public class AppMain implements CommandLineRunner
     public static void main(String[] args) 
     {
         SpringApplication.run(AppMain.class, args);
-        System.out.println(">>>>> AppMain running....");     
+        System.out.println(">>>>> AppMain running.......");     
     }
 
     @Override
