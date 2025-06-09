@@ -51,7 +51,7 @@ public class EncryptionService {
     public CompletableFuture<byte[]> encryptAsync(byte[] dataToEncrypt) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                System.out.println("Encrypting data of length: " + dataToEncrypt.length);
+                // System.out.println("Encrypting data of length: " + dataToEncrypt.length);
                 byte[] paddedData = padData(dataToEncrypt);
                 byte[] result = new byte[paddedData.length];
                 for (int i = 0; i < paddedData.length; i += 16) {
@@ -59,10 +59,10 @@ public class EncryptionService {
                     byte[] encryptedBlock = encryptionEngine.encrypt(block);
                     System.arraycopy(encryptedBlock, 0, result, i, 16);
                 }
-                System.out.println("Encryption complete. Result length: " + result.length);
+                // System.out.println("Encryption complete. Result length: " + result.length);
                 return result;
             } catch (Exception e) {
-                System.err.println("Encryption failed: " + e.getMessage());
+                // System.err.println("Encryption failed: " + e.getMessage());
                 throw new RuntimeException("Failed to encrypt data", e);
             }
         }, executorService);
@@ -87,7 +87,7 @@ public class EncryptionService {
     public CompletableFuture<byte[]> decryptAsync(byte[] encryptedData) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                System.out.println("Decrypting data of length: " + encryptedData.length);
+                // System.out.println("Decrypting data of length: " + encryptedData.length);
                 if (encryptedData.length % 16 != 0) {
                     throw new IllegalArgumentException("Encrypted data length must be multiple of 16");
                 }
@@ -98,10 +98,10 @@ public class EncryptionService {
                     System.arraycopy(decryptedBlock, 0, decrypted, i, 16);
                 }
                 byte[] unpaddedData = removePadding(decrypted);
-                System.out.println("Decryption complete. Result length: " + unpaddedData.length);
+                // System.out.println("Decryption complete. Result length: " + unpaddedData.length);
                 return unpaddedData;
             } catch (Exception e) {
-                System.err.println("Decryption failed: " + e.getMessage());
+                // System.err.println("Decryption failed: " + e.getMessage());
                 throw new RuntimeException("Failed to decrypt data", e);
             }
         }, executorService);
@@ -110,12 +110,12 @@ public class EncryptionService {
     public CompletableFuture<byte[]> encryptStringAsync(String text) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                System.out.println("Encrypting string of length: " + text.length());
+                // System.out.println("Encrypting string of length: " + text.length());
                 byte[] encrypted = encryptionEngine.encryptString(text);
-                System.out.println("Encryption complete. Result length: " + encrypted.length);
+                // System.out.println("Encryption complete. Result length: " + encrypted.length);
                 return encrypted;
             } catch (Exception e) {
-                System.err.println("String encryption failed: " + e.getMessage());
+                // System.err.println("String encryption failed: " + e.getMessage());
                 throw new RuntimeException("Failed to encrypt string", e);
             }
         }, executorService);
@@ -124,12 +124,12 @@ public class EncryptionService {
     public CompletableFuture<String> decryptToStringAsync(byte[] encryptedData) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                System.out.println("Decrypting to string, data length: " + encryptedData.length);
+                // System.out.println("Decrypting to string, data length: " + encryptedData.length);
                 String decrypted = encryptionEngine.decryptToString(encryptedData);
-                System.out.println("Decryption complete. Result length: " + decrypted.length());
+                // System.out.println("Decryption complete. Result length: " + decrypted.length());
                 return decrypted;
             } catch (Exception e) {
-                System.err.println("String decryption failed: " + e.getMessage());
+                // System.err.println("String decryption failed: " + e.getMessage());
                 throw new RuntimeException("Failed to decrypt to string", e);
             }
         }, executorService);

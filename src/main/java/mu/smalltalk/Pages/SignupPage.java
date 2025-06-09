@@ -286,7 +286,7 @@ public class SignupPage extends VerticalLayout {
                 String password = passwordField.getValue();
                 
                 // Debug logging - step 1
-                System.out.println("Attempting registration with values: Name=" + fullName + ", Email=" + email);
+                // System.out.println("Attempting registration with values: Name=" + fullName + ", Email=" + email);
                 
                 // Validate inputs
                 if (fullName.isEmpty() || email.isEmpty() || password.isEmpty()) {
@@ -296,13 +296,13 @@ public class SignupPage extends VerticalLayout {
                 }
                 
                 // Debug logging - step 2
-                System.out.println("Input validation passed, calling userService.registerUser()");
+                // System.out.println("Input validation passed, calling userService.registerUser()");
                 
                 // Call the service to register the user
                 User registeredUser = userService.registerUser(fullName, email, password);
                 
                 // Debug logging - step 3
-                System.out.println("User registered successfully: " + registeredUser);
+                // System.out.println("User registered successfully: " + registeredUser);
                 
                 // Show success notification
                 Notification.show("Account created successfully!", 3000, Notification.Position.TOP_CENTER)
@@ -312,8 +312,8 @@ public class SignupPage extends VerticalLayout {
                 UI.getCurrent().navigate("/login");
             } catch (Exception e) {
                 // Enhanced error logging
-                System.err.println("Registration failed with exception: " + e.getClass().getName());
-                System.err.println("Error message: " + e.getMessage());
+                // System.err.println("Registration failed with exception: " + e.getClass().getName());
+                // System.err.println("Error message: " + e.getMessage());
                 e.printStackTrace();
                 
                 // Show error notification

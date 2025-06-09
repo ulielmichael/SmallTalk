@@ -262,7 +262,7 @@ public class LoginPage extends VerticalLayout {
                 String password = passwordField.getValue();
                 
                 // Log the login attempt (for debugging)
-                System.out.println("Login attempt for email: " + email);
+                // System.out.println("Login attempt for email: " + email);
                 
                 // Try to authenticate the user
                 User authenticatedUser = userService.authenticateUser(email, password);
@@ -274,7 +274,7 @@ public class LoginPage extends VerticalLayout {
                         .addThemeVariants(NotificationVariant.LUMO_ERROR);
                     
                     // Optional: Add some logging
-                    System.err.println("Login failed for email: " + email);
+                    // System.err.println("Login failed for email: " + email);
                     return;
                 }
                 
@@ -303,7 +303,7 @@ public class LoginPage extends VerticalLayout {
                 
             } catch (Exception ex) {
                 // Detailed error logging
-                System.err.println("Login error: " + ex.getMessage());
+                // System.err.println("Login error: " + ex.getMessage());
                 ex.printStackTrace();
                 
                 // Show generic error message to user

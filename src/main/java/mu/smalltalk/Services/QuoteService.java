@@ -38,7 +38,7 @@ public class QuoteService {
             HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
             
         } catch (Exception e) {
-            System.err.println("Error setting up SSL context: " + e.getMessage());
+            // System.err.println("Error setting up SSL context: " + e.getMessage());
         }
         
         return new RestTemplate();
@@ -54,7 +54,7 @@ public class QuoteService {
                 return new Quote(response[0].getQ(), response[0].getA());
             }
         } catch (RestClientException e) {
-            System.err.println("Error fetching quote from ZenQuotes API: " + e.getMessage());
+            // System.err.println("Error fetching quote from ZenQuotes API: " + e.getMessage());
         }
         
      

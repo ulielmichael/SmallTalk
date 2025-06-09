@@ -17,15 +17,19 @@ public class GlobalMessageBroadcaster {
      */
     public interface GroupMessageConsumer {
         void accept(String message, String groupId);
+        // Add method to get sender ID if needed
+        default String getSenderId() { return null; }
     }
     
     private static class BroadcastListener {
         final UI ui;
         final GroupMessageConsumer consumer;
+        final String senderId; // Add sender ID to listener
         
         BroadcastListener(UI ui, GroupMessageConsumer consumer) {
             this.ui = ui;
             this.consumer = consumer;
+            this.senderId = consumer.getSenderId();
         }
     }
     
@@ -37,16 +41,16 @@ public class GlobalMessageBroadcaster {
      */
     public static synchronized Registration register(UI ui, GroupMessageConsumer messageConsumer) {
         if (ui == null || messageConsumer == null) {
-            System.err.println("Cannot register null UI or consumer");
+            // System.err.println("Cannot register null UI or consumer");
             return null;
         }
         
-        System.out.println("Registering UI: " + ui.getUIId() + " for broadcasts");
+        // System.out.println("Registering UI: " + ui.getUIId() + " for broadcasts");
         BroadcastListener listener = new BroadcastListener(ui, messageConsumer);
         listeners.add(listener);
         
         return () -> {
-            System.out.println("Removing UI: " + ui.getUIId() + " from broadcasts");
+            // System.out.println("Removing UI: " + ui.getUIId() + " from broadcasts");
             listeners.remove(listener);
         };
     }
@@ -58,13 +62,13 @@ public class GlobalMessageBroadcaster {
      */
     public static synchronized void broadcastToGroup(String message, String groupId) {
         if (groupId == null) {
-            System.err.println("Cannot broadcast to null group ID");
+            // System.err.println("Cannot broadcast to null group ID");
             return;
         }
         
         // Store message in group-specific persistent storage        
-        System.out.println("Broadcasting message to group " + groupId + ": " + message);
-        System.out.println("Active listeners: " + listeners.size());
+        // System.out.println("Broadcasting message to group " + groupId + ": " + message);
+        // System.out.println("Active listeners: " + listeners.size());
         
         List<BroadcastListener> toRemove = new ArrayList<>();
         
@@ -74,32 +78,94 @@ public class GlobalMessageBroadcaster {
             
             if (ui != null && ui.isAttached()) {
                 try {
-                    System.out.println("Sending to UI: " + ui.getUIId());
+                    // System.out.println("Sending to UI: " + ui.getUIId());
                     ui.access(() -> {
                         try {
+                             ui.getPage().executeJs(
+                        "localStorage.setItem('chat-update-trigger', Date.now().toString());"
+                    );
                             consumer.accept(message, groupId);
                             ui.push();
                         } catch (Exception e) {
-                            System.err.println("Error delivering message to UI " + ui.getUIId() + ": " + e.getMessage());
+                            // System.err.println("Error delivering message to UI " + ui.getUIId() + ": " + e.getMessage());
                         }
                     });
                     
-                    ui.getPage().executeJs(
-                        "localStorage.setItem('chat-update-trigger', Date.now().toString());"
-                    );
+                   
                 } catch (UIDetachedException e) {
-                    System.out.println("UI " + ui.getUIId() + " detached, marking for removal");
+                    // System.out.println("UI " + ui.getUIId() + " detached, marking for removal");
                     toRemove.add(listener);
                 }
             } else {
-                System.out.println("UI detached or null, marking for removal");
+                // System.out.println("UI detached or null, marking for removal");
                 toRemove.add(listener);
             }
         }
         
         if (!toRemove.isEmpty()) {
             listeners.removeAll(toRemove);
-            System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
+            // System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
+        }
+    }
+    
+    /**
+     * Broadcast a message to all registered listeners in a specific group, excluding the sender
+     * @param message The message to broadcast
+     * @param groupId The ID of the group to broadcast to
+     * @param excludeSenderId The sender ID to exclude from broadcast
+     */
+    public static synchronized void broadcastToGroupExcludingSender(String message, String groupId, String excludeSenderId) {
+        if (groupId == null) {
+            // System.err.println("Cannot broadcast to null group ID");
+            return;
+        }
+        
+        // Store message in group-specific persistent storage        
+        // System.out.println("Broadcasting message to group " + groupId + " excluding sender " + excludeSenderId + ": " + message);
+        // System.out.println("Active listeners: " + listeners.size());
+        
+        List<BroadcastListener> toRemove = new ArrayList<>();
+        
+        for (BroadcastListener listener : listeners) {
+            UI ui = listener.ui;
+            GroupMessageConsumer consumer = listener.consumer;
+            String listenerSenderId = listener.senderId;
+            
+            // Skip if this listener belongs to the sender we want to exclude
+            if (excludeSenderId != null && excludeSenderId.equals(listenerSenderId)) {
+                // System.out.println("Skipping sender UI: " + ui.getUIId());
+                continue;
+            }
+            
+            if (ui != null && ui.isAttached()) {
+                try {
+                    // System.out.println("Sending to UI: " + ui.getUIId());
+                    ui.access(() -> {
+                        try {
+                             ui.getPage().executeJs(
+                        "localStorage.setItem('chat-update-trigger', Date.now().toString());"
+                    );
+                            consumer.accept(message, groupId);
+                            ui.push();
+                        } catch (Exception e) {
+                            // System.err.println("Error delivering message to UI " + ui.getUIId() + ": " + e.getMessage());
+                        }
+                    });
+                    
+                   
+                } catch (UIDetachedException e) {
+                    // System.out.println("UI " + ui.getUIId() + " detached, marking for removal");
+                    toRemove.add(listener);
+                }
+            } else {
+                // System.out.println("UI detached or null, marking for removal");
+                toRemove.add(listener);
+            }
+        }
+        
+        if (!toRemove.isEmpty()) {
+            listeners.removeAll(toRemove);
+            // System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
         }
     }
     
@@ -111,8 +177,8 @@ public class GlobalMessageBroadcaster {
     public static synchronized void broadcast(String message) {
         // Store message in persistent storage
         
-        System.out.println("Broadcasting global message: " + message);
-        System.out.println("Active listeners: " + listeners.size());
+        // System.out.println("Broadcasting global message: " + message);
+        // System.out.println("Active listeners: " + listeners.size());
         
         List<BroadcastListener> toRemove = new ArrayList<>();
         
@@ -122,33 +188,34 @@ public class GlobalMessageBroadcaster {
             
             if (ui != null && ui.isAttached()) {
                 try {
-                    System.out.println("Sending to UI: " + ui.getUIId());
+                    // System.out.println("Sending to UI: " + ui.getUIId());
                     ui.access(() -> {
                         try {
+                             ui.getPage().executeJs(
+                        "localStorage.setItem('chat-update-trigger', Date.now().toString());"
+                    );
                             // Pass null as groupId for global messages
                             consumer.accept(message, null);
                             ui.push();
                         } catch (Exception e) {
-                            System.err.println("Error delivering message to UI " + ui.getUIId() + ": " + e.getMessage());
+                            // System.err.println("Error delivering message to UI " + ui.getUIId() + ": " + e.getMessage());
                         }
                     });
                     
-                    ui.getPage().executeJs(
-                        "localStorage.setItem('chat-update-trigger', Date.now().toString());"
-                    );
+                   
                 } catch (UIDetachedException e) {
-                    System.out.println("UI " + ui.getUIId() + " detached, marking for removal");
+                    // System.out.println("UI " + ui.getUIId() + " detached, marking for removal");
                     toRemove.add(listener);
                 }
             } else {
-                System.out.println("UI detached or null, marking for removal");
+                // System.out.println("UI detached or null, marking for removal");
                 toRemove.add(listener);
             }
         }
         
         if (!toRemove.isEmpty()) {
             listeners.removeAll(toRemove);
-            System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
+            // System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
         }
     }
     

@@ -35,7 +35,7 @@ public class MongoDbSerivce
 
     public List<Group> getUserGroups(String userId) {
         List<Group> groups = groupRepo.findByUsersContaining(userId);
-        System.out.println("User Groups for " + userId + ": " + groups);
+        // System.out.println("User Groups for " + userId + ": " + groups);
         return groups;
     }
     

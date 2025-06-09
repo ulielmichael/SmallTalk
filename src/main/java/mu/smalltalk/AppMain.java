@@ -4,11 +4,14 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+import com.vaadin.flow.component.page.AppShellConfigurator;
+import com.vaadin.flow.component.page.Push;
+
 import mu.smalltalk.Services.MongoDbSerivce;
 import mu.smalltalk.entitis.User;
-
+@Push
 @SpringBootApplication
-public class AppMain implements CommandLineRunner
+public class AppMain implements AppShellConfigurator,CommandLineRunner
 {
     // // @Autowired
     // private MongoDbSerivce mongoDbSerivce;
@@ -33,7 +36,7 @@ public class AppMain implements CommandLineRunner
         // mongoDbSerivce.addUsertoDB(user4);
         
 
-        // Group group1 = new Group("group1");
+        // Group group1 = new Group("group1");f
         // group1.addUserId("ilanp@gmail.com");
         // group1.addUserId("michaell@gmail.com");
 
