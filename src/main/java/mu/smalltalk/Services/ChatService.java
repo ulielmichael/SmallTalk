@@ -321,18 +321,10 @@ public class ChatService {
         }
     }
     
-    // ================== מתודות תאימות עם קוד ישן ==================
-    
-    /**
-     * טעינת הודעות סטנדרטית - לתאימות עם קוד ישן
-     */
     public List<String> getGroupMessages(String groupId) {
         return getInitialMessages(groupId);
     }
-    
-    /**
-     * טעינת הודעות עם גודל מותאם - לתאימות עם קוד ישן
-     */
+   
     public List<String> getGroupMessages(String groupId, int pageSize) {
         if (groupId == null || groupId.trim().isEmpty()) {
             return new ArrayList<>();
