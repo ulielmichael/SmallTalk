@@ -180,7 +180,7 @@ public Chatpage(ChatService chatService) {
 
         // If no groups exist, create a default group for this user
         if (userGroups.isEmpty()) {
-            System.out.println("No groups found for user " + currentUser.getEmail() + ", creating a default group");
+            // System.out.println("No groups found for user " + currentUser.getEmail() + ", creating a default group");
             Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getEmail());
             userGroups = GroupService.getUserGroups(currentUser.getEmail());
         }
@@ -189,11 +189,11 @@ public Chatpage(ChatService chatService) {
     }
 
     groupSelector.addValueChangeListener(event -> {
-        System.out.println("Selected Group: " + event.getValue());
+        // System.out.println("Selected Group: " + event.getValue());
 
         if (event.getValue() != null) {
             currentGroupId = event.getValue().getId();
-            System.out.println("Current Group ID set to: " + currentGroupId);
+            // System.out.println("Current Group ID set to: " + currentGroupId);
 
             // Show user list when a group is selected
             userListContainer.setVisible(true);
@@ -415,7 +415,7 @@ public Chatpage(ChatService chatService) {
 
     private void addMessageToDatabase(String formattedMessage, String groupId) {
         if (groupId == null) {
-            System.err.println("Cannot save message: Group ID is null");
+            // System.err.println("Cannot save message: Group ID is null");
             return;
         }
 
@@ -426,7 +426,7 @@ public Chatpage(ChatService chatService) {
         if (chatService != null) {
             chatService.addGroupMessage(formattedMessage, groupId, senderId);
         } else {
-            System.err.println("Cannot save message: ChatService is null");
+            // System.err.println("Cannot save message: ChatService is null");
         }
     }
 
@@ -569,7 +569,7 @@ public Chatpage(ChatService chatService) {
                             );
                             
                         } catch (Exception e) {
-                            System.err.println("Error displaying messages: " + e.getMessage());
+                            // System.err.println("Error displaying messages: " + e.getMessage());
                             showLoadingIndicators(false);
                         }
                         ui.push();
@@ -582,7 +582,7 @@ public Chatpage(ChatService chatService) {
                     ui.access(() -> {
                         showLoadingIndicators(false);
                         // Don't show error to user, just log it
-                        System.err.println("Error loading messages: " + ex.getMessage());
+                        // System.err.println("Error loading messages: " + ex.getMessage());
                         ui.push();
                     });
                 }
@@ -686,94 +686,65 @@ public Chatpage(ChatService chatService) {
         }
     }
 
-   private void setupMessageHandler() {
-    UI currentUI = UI.getCurrent();
-    VaadinSession currentSession = VaadinSession.getCurrent();
-
-    messageInput.addSubmitListener(submitEvent -> {
-        if (currentGroupId == null) {
-            Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
-            return;
-        }
-
-        String message = submitEvent.getValue();
-        String timestamp = dateFormat.format(new Date());
-
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-
-        System.out.println("Received message from " + displayName + " in group " + currentGroupId + ": " + message);
-
-        // Show sending status
-        showMessageStatus("Sending text message...", true);
-
-        String formattedMessage = "[" + timestamp + "] " + displayName + ":<br>" + message;
-        
-        // הוסף את ההודעה מיד לצ'אט של השולח
-        addMessageToChat(formattedMessage);
-        
-        // שלח את ההודעה לבסיס הנתונים ולמשתמשים אחרים (ללא UI operations)
-        sendGroupMessageSafely(formattedMessage, currentGroupId);
-
-        encryptionService.encryptStringAsync(message)
-                .thenAccept(encryptedMessage -> {
-                    if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
-                        currentSession.lock();
-                        try {
-                            currentUI.access(() -> {
-                                String encTimestamp = dateFormat.format(new Date());
-                                String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
-
-                                String encryptedFormattedMessage = "[" + encTimestamp + "] " + displayName +
-                                        " <b>[Encrypted]</b>:<br>" + encodedMessage;
-
-                                // הוסף את ההודעה המוצפנת מיד לצ'אט של השולח
-                                addMessageToChat(encryptedFormattedMessage);
-                                
-                                // שלח את ההודעה המוצפנת (ללא UI operations)
-                                sendGroupMessageSafely(encryptedFormattedMessage, currentGroupId);
-
-                                decryptAndDisplayMessage(encodedMessage, currentGroupId);
-                                
-                                // Show success status
-                                showMessageStatus("Text message sent successfully!", true);
-                                
-                                currentUI.push();
-                            });
-                        } finally {
-                            currentSession.unlock();
+    private void setupMessageHandler() {
+        UI currentUI = UI.getCurrent();
+        VaadinSession currentSession = VaadinSession.getCurrent();
+    
+        messageInput.addSubmitListener(submitEvent -> {
+            if (currentGroupId == null) {
+                Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
+                return;
+            }
+    
+            String message = submitEvent.getValue();
+            String timestamp = dateFormat.format(new Date());
+    
+            User currentUser = UserService.getAuthenticatedUser();
+            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+    
+            // צור הודעה מורכבת עם המידע המוצפן והמקורי
+            encryptionService.encryptStringAsync(message)
+                    .thenAccept(encryptedMessage -> {
+                        if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
+                            currentSession.lock();
+                            try {
+                                currentUI.access(() -> {
+                                    String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
+                                    
+                                    // שמור הודעה אחת עם שני הערכים
+                                    String combinedMessage = "[" + timestamp + "] " + displayName + ":<br>" +
+                                            "<!-- ENCRYPTION_DATA:" + encodedMessage + " -->" +
+                                            message; // הטקסט המקורי נשאר בסוף
+    
+                                    sendGroupMessageSafely(combinedMessage, currentGroupId);
+                                    showMessageStatus("Message sent successfully!", true);
+                                    
+                                    currentUI.push();
+                                });
+                            } finally {
+                                currentSession.unlock();
+                            }
                         }
-                    }
-                })
-                .exceptionally(ex -> {
-                    if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
-                        currentSession.lock();
-                        try {
-                            currentUI.access(() -> {
-                                String errorTimestamp = dateFormat.format(new Date());
-                                String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                        " <b>[Error]</b>:<br>Error encrypting message: " + ex.getMessage();
-
-                                // הוסף את הודעת השגיאה מיד לצ'אט של השולח
-                                addMessageToChat(errorMessage);
-                                
-                                // שלח את הודעת השגיאה (ללא UI operations)
-                                sendGroupMessageSafely(errorMessage, currentGroupId);
-                                
-                                // Show error status
-                                showMessageStatus("Error sending message: " + ex.getMessage(), false);
-
-                                currentUI.push();
-                            });
-                        } finally {
-                            currentSession.unlock();
+                    })
+                    .exceptionally(ex -> {
+                        // אם ההצפנה נכשלה, שלח לפחות את ההודעה הרגילה
+                        if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
+                            currentSession.lock();
+                            try {
+                                currentUI.access(() -> {
+                                    String normalMessage = "[" + timestamp + "] " + displayName + ":<br>" + message;
+                                    sendGroupMessageSafely(normalMessage, currentGroupId);
+                                    showMessageStatus("Message sent (encryption failed)", false);
+                                    currentUI.push();
+                                });
+                            } finally {
+                                currentSession.unlock();
+                            }
                         }
-                    }
-                    return null;
-                });
-    });
-}
-
+                        return null;
+                    });
+        });
+    }
     private void setupCrossBrowserCommunication() {
         UI ui = UI.getCurrent();
         if (ui != null) {
@@ -841,7 +812,7 @@ public Chatpage(ChatService chatService) {
                         ui.getPage().executeJs("window.notifyOtherWindows && window.notifyOtherWindows();");
                     }
                 } catch (Exception e) {
-                    System.err.println("Error checking messages: " + e.getMessage());
+                    // System.err.println("Error checking messages: " + e.getMessage());
                 }
                 ui.push();
             });
@@ -856,7 +827,7 @@ public Chatpage(ChatService chatService) {
                 broadcasterRegistration = null;
             }
 
-            System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
+            // System.out.println("Registering UI: " + ui.getUIId() + " with broadcaster");
 
             // Using the GroupMessageConsumer interface
             broadcasterRegistration = GlobalMessageBroadcaster.register(ui, (message, groupId) -> {
@@ -871,18 +842,18 @@ public Chatpage(ChatService chatService) {
             });
 
             if (broadcasterRegistration == null) {
-                System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
+                // System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
                 Notification.show("Failed to connect to the chat server. Please refresh the page.",
                         3000, Notification.Position.MIDDLE);
             }
         } else {
-            System.err.println("Cannot register with broadcaster - UI is null");
+            // System.err.println("Cannot register with broadcaster - UI is null");
         }
     }
 
     public void ensureRegistration() {
         if (broadcasterRegistration == null || !GlobalMessageBroadcaster.isRegistered(UI.getCurrent())) {
-            System.out.println("Re-registering with broadcaster after reconnection");
+            // System.out.println("Re-registering with broadcaster after reconnection");
             registerWithBroadcaster();
         }
 
@@ -998,118 +969,106 @@ public Chatpage(ChatService chatService) {
     };
 
     upload.addSucceededListener(event -> {
-    if (currentGroupId == null) {
-        Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
-        clearUpload.run(); // Clear upload even on error
-        return;
-    }
-
-    UI ui = UI.getCurrent();
-    VaadinSession session = VaadinSession.getCurrent();
-
-    User currentUser = UserService.getAuthenticatedUser();
-    String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-    String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
-
-    String fileName = event.getFileName();
-    String mimeType = event.getMIMEType();
-    try {
-        InputStream inputStream = buffer.getInputStream();
-        byte[] fileData = inputStream.readAllBytes();
-        String base64Data = Base64.getEncoder().encodeToString(fileData);
-        String timestamp = dateFormat.format(new Date());
-
-        String mediaType = mimeType.startsWith("image/") ? "IMAGE" : "SOUND";
-        Message mediaMessage = new Message(senderId, currentGroupId, null, fileData, mediaType, currentGroupId);
-        messageRepository.save(mediaMessage);
-
-        String mediaHtml;
-        if (mimeType.startsWith("image/")) {
-            mediaHtml = "[" + timestamp + "] " + displayName + " <b>[תמונה]</b>:<br>" +
-                    "<img src='data:" + mimeType + ";base64," + base64Data +
-                    "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
-        } else if (mimeType.startsWith("audio/")) {
-            mediaHtml = "[" + timestamp + "] " + displayName + " <b>[אודיו]</b>:<br>" +
-                    "<audio controls><source src='data:" + mimeType + ";base64," +
-                    base64Data + "' type='" + mimeType + "'></audio>";
-        } else {
-            clearUpload.run(); // Clear upload for unsupported files
+        if (currentGroupId == null) {
+            Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
+            clearUpload.run();
             return;
         }
-
-        // הוסף את המדיה מיד לצ'אט של השולח
-        addMessageToChat(mediaHtml);
-        
-        // שלח את המדיה למשתמשים אחרים (ללא UI operations)
-        sendGroupMessageSafely(mediaHtml, currentGroupId);
-
-        final byte[] finalFileData = fileData;
-        encryptionService.encryptAsync(finalFileData)
-                .thenAccept(encryptedData -> {
-                    if (ui.isAttached() && !session.getSession().isNew()) {
-                        session.lock();
-                        try {
-                            ui.access(() -> {
-                                String encTimestamp = dateFormat.format(new Date());
-                                String successMessage = "[" + encTimestamp + "] " + displayName +
-                                        " <b>[File Encrypted]</b>:<br>The file " + fileName
-                                        + " encrypted successfully";
-
-                                // הוסף את הודעת ההצפנה מיד לצ'ט של השולח
-                                addMessageToChat(successMessage);
-                                
-                                // שלח את הודעת ההצפנה למשתמשים אחרים (ללא UI operations)
-                                sendGroupMessageSafely(successMessage, currentGroupId);
-
-                                ui.push();
-                            });
-                        } finally {
-                            session.unlock();
+    
+        UI ui = UI.getCurrent();
+        VaadinSession session = VaadinSession.getCurrent();
+    
+        User currentUser = UserService.getAuthenticatedUser();
+        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+        String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
+    
+        String fileName = event.getFileName();
+        String mimeType = event.getMIMEType();
+        try {
+            InputStream inputStream = buffer.getInputStream();
+            byte[] fileData = inputStream.readAllBytes();
+            String base64Data = Base64.getEncoder().encodeToString(fileData);
+            String timestamp = dateFormat.format(new Date());
+    
+            String mediaType = mimeType.startsWith("image/") ? "IMAGE" : "SOUND";
+            Message mediaMessage = new Message(senderId, currentGroupId, null, fileData, mediaType, currentGroupId);
+            messageRepository.save(mediaMessage);
+    
+            String mediaHtml;
+            if (mimeType.startsWith("image/")) {
+                mediaHtml = "[" + timestamp + "] " + displayName + " <b>[תמונה]</b>:<br>" +
+                        "<img src='data:" + mimeType + ";base64," + base64Data +
+                        "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
+            } else if (mimeType.startsWith("audio/")) {
+                mediaHtml = "[" + timestamp + "] " + displayName + " <b>[אודיו]</b>:<br>" +
+                        "<audio controls><source src='data:" + mimeType + ";base64," +
+                        base64Data + "' type='" + mimeType + "'></audio>";
+            } else {
+                clearUpload.run();
+                return;
+            }
+    
+            // רק שלח את המדיה - אל תוסיף מקומית
+            // הוספה מקומית תקרה דרך ה-broadcaster
+            sendGroupMessageSafely(mediaHtml, currentGroupId);
+    
+            final byte[] finalFileData = fileData;
+            encryptionService.encryptAsync(finalFileData)
+                    .thenAccept(encryptedData -> {
+                        if (ui.isAttached() && !session.getSession().isNew()) {
+                            session.lock();
+                            try {
+                                ui.access(() -> {
+                                    String encTimestamp = dateFormat.format(new Date());
+                                    String successMessage = "[" + encTimestamp + "] " + displayName +
+                                            " <b>[File Encrypted]</b>:<br>The file " + fileName
+                                            + " encrypted successfully";
+    
+                                    // רק שלח את הודעת ההצפנה - אל תוסיף מקומית
+                                    sendGroupMessageSafely(successMessage, currentGroupId);
+    
+                                    ui.push();
+                                });
+                            } finally {
+                                session.unlock();
+                            }
                         }
-                    }
-                })
-                .exceptionally(ex -> {
-                    if (ui.isAttached() && !session.getSession().isNew()) {
-                        session.lock();
-                        try {
-                            ui.access(() -> {
-                                String errorTimestamp = dateFormat.format(new Date());
-                                String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                        " <b>[Error]</b>:<br>Error encrypting file: " + ex.getMessage();
-
-                                // הוסף את הודעת השגיאה מיד לצ'אט של השולח
-                                addMessageToChat(errorMessage);
-                                
-                                // שלח את הודעת השגיאה למשתמשים אחרים (ללא UI operations)
-                                sendGroupMessageSafely(errorMessage, currentGroupId);
-
-                                ui.push();
-                            });
-                        } finally {
-                            session.unlock();
+                    })
+                    .exceptionally(ex -> {
+                        if (ui.isAttached() && !session.getSession().isNew()) {
+                            session.lock();
+                            try {
+                                ui.access(() -> {
+                                    String errorTimestamp = dateFormat.format(new Date());
+                                    String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                                            " <b>[Error]</b>:<br>Error encrypting file: " + ex.getMessage();
+    
+                                    // רק שלח את הודעת השגיאה - אל תוסיף מקומית
+                                    sendGroupMessageSafely(errorMessage, currentGroupId);
+    
+                                    ui.push();
+                                });
+                            } finally {
+                                session.unlock();
+                            }
                         }
-                    }
-                    return null;
-                });
-    } catch (IOException e) {
-        String errorTimestamp = dateFormat.format(new Date());
-        String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                " <b>[Error]</b>:<br>Error processing file: " + e.getMessage();
-
-        // הוסף את הודעת השגיאה מיד לצ'אט של השולח
-        addMessageToChat(errorMessage);
-        
-        // שלח את הודעת השגיאה למשתמשים אחרים (ללא UI operations)
-        sendGroupMessageSafely(errorMessage, currentGroupId);
-    }
-
-    // נקה את רכיב ההעלאה בצורה יסודית לאפשר העלאות חדשות
-    clearUpload.run();
-});
+                        return null;
+                    });
+        } catch (IOException e) {
+            String errorTimestamp = dateFormat.format(new Date());
+            String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                    " <b>[Error]</b>:<br>Error processing file: " + e.getMessage();
+    
+            // רק שלח את הודעת השגיאה - אל תוסיף מקומית
+            sendGroupMessageSafely(errorMessage, currentGroupId);
+        }
+    
+        clearUpload.run();
+    });
 }
 private void sendGroupMessageSafely(String message, String groupId) {
     if (groupId == null) {
-        System.err.println("Cannot send message: Group ID is null");
+        // System.err.println("Cannot send message: Group ID is null");
         return;
     }
 
@@ -1140,7 +1099,7 @@ private void sendGroupMessageSafely(String message, String groupId) {
                 currentSession.unlock();
             }
         } catch (Exception e) {
-            System.err.println("Error executing JavaScript: " + e.getMessage());
+            // System.err.println("Error executing JavaScript: " + e.getMessage());
         }
     }
 }
@@ -1160,78 +1119,69 @@ private void sendGroupMessageSafely(String message, String groupId) {
         }
     }
 
-   private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
-    try {
-        byte[] encryptedBytes = Base64.getDecoder().decode(encodedMessage);
-
-        UI ui = UI.getCurrent();
-        VaadinSession session = VaadinSession.getCurrent();
-
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-
-        encryptionService.decryptAsync(encryptedBytes)
-                .thenAccept(decryptedBytes -> {
-                    if (ui.isAttached() && !session.getSession().isNew()) {
-                        session.lock();
-                        try {
-                            ui.access(() -> {
-                                String decTimestamp = dateFormat.format(new Date());
-                                String decryptedText = new String(decryptedBytes, StandardCharsets.UTF_8);
-                                String decryptedMessage = "[" + decTimestamp + "] " + displayName +
-                                        " <b>[Decrypted]</b>:<br>" + decryptedText;
-
-                                // הוסף את ההודעה הפענוחה לצ'אט המקומי
-                                addMessageToChat(decryptedMessage);
-                                
-                                // שלח את ההודעה הפענוחה (ללא UI operations)
-                                sendGroupMessageSafely(decryptedMessage, groupId);
-
-                                ui.push();
-                            });
-                        } finally {
-                            session.unlock();
+    private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
+        try {
+            byte[] encryptedBytes = Base64.getDecoder().decode(encodedMessage);
+    
+            UI ui = UI.getCurrent();
+            VaadinSession session = VaadinSession.getCurrent();
+    
+            User currentUser = UserService.getAuthenticatedUser();
+            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+    
+            encryptionService.decryptAsync(encryptedBytes)
+                    .thenAccept(decryptedBytes -> {
+                        if (ui.isAttached() && !session.getSession().isNew()) {
+                            session.lock();
+                            try {
+                                ui.access(() -> {
+                                    String decTimestamp = dateFormat.format(new Date());
+                                    String decryptedText = new String(decryptedBytes, StandardCharsets.UTF_8);
+                                    String decryptedMessage = "[" + decTimestamp + "] " + displayName +
+                                            " <b>[Decrypted]</b>:<br>" + decryptedText;
+    
+                                    // רק שלח את ההודעה הפענוחה - אל תוסיף מקומית
+                                    sendGroupMessageSafely(decryptedMessage, groupId);
+    
+                                    ui.push();
+                                });
+                            } finally {
+                                session.unlock();
+                            }
                         }
-                    }
-                })
-                .exceptionally(ex -> {
-                    if (ui.isAttached() && !session.getSession().isNew()) {
-                        session.lock();
-                        try {
-                            ui.access(() -> {
-                                String errorTimestamp = dateFormat.format(new Date());
-                                String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                        " <b>[Error]</b>:<br>Error decrypting message: " + ex.getMessage();
-
-                                // הוסף את הודעת השגיאה לצ'אט המקומי
-                                addMessageToChat(errorMessage);
-                                
-                                // שלח את הודעת השגיאה (ללא UI operations)
-                                sendGroupMessageSafely(errorMessage, groupId);
-
-                                ui.push();
-                            });
-                        } finally {
-                            session.unlock();
+                    })
+                    .exceptionally(ex -> {
+                        if (ui.isAttached() && !session.getSession().isNew()) {
+                            session.lock();
+                            try {
+                                ui.access(() -> {
+                                    String errorTimestamp = dateFormat.format(new Date());
+                                    String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                                            " <b>[Error]</b>:<br>Error decrypting message: " + ex.getMessage();
+    
+                                    // רק שלח את הודעת השגיאה - אל תוסיף מקומית
+                                    sendGroupMessageSafely(errorMessage, groupId);
+    
+                                    ui.push();
+                                });
+                            } finally {
+                                session.unlock();
+                            }
                         }
-                    }
-                    return null;
-                });
-    } catch (IllegalArgumentException e) {
-        String errorTimestamp = dateFormat.format(new Date());
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-
-        String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                " <b>[Error]</b>:<br>Error decoding Base64: " + e.getMessage();
-
-        // הוסף את הודעת השגיאה לצ'אט המקומי
-        addMessageToChat(errorMessage);
-        
-        // שלח את הודעת השגיאה (ללא UI operations)
-        sendGroupMessageSafely(errorMessage, groupId);
+                        return null;
+                    });
+        } catch (IllegalArgumentException e) {
+            String errorTimestamp = dateFormat.format(new Date());
+            User currentUser = UserService.getAuthenticatedUser();
+            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
+    
+            String errorMessage = "[" + errorTimestamp + "] " + displayName +
+                    " <b>[Error]</b>:<br>Error decoding Base64: " + e.getMessage();
+    
+            // רק שלח את הודעת השגיאה - אל תוסיף מקומית
+            sendGroupMessageSafely(errorMessage, groupId);
+        }
     }
-}
     private Aes256 initializeEncryption() {
         try {
             byte[] key = new byte[32];

@@ -27,7 +27,7 @@ public class UserService {
     public UserService(UserRepository userRepository) {
         UserService.userRepository = userRepository;
         this.passwordEncoder = new BCryptPasswordEncoder();
-        System.out.println("UserService initialized with repository: " + userRepository);
+        // System.out.println("UserService initialized with repository: " + userRepository);
     }
     
     /**
@@ -62,7 +62,7 @@ public class UserService {
     
     public User registerUser(String fullName, String email, String password) {
         // Log debug information
-        System.out.println("Registering user: " + fullName + " with email: " + email);
+        // System.out.println("Registering user: " + fullName + " with email: " + email);
         
         // Validate inputs
         if (email == null || email.trim().isEmpty()) {
@@ -79,32 +79,32 @@ public class UserService {
         
         // Check if email already exists - קריטי לבצע בדיקה זו
         if (userRepository.existsByEmail(email)) {
-            System.out.println("Registration failed: Email already exists: " + email);
+            // System.out.println("Registration failed: Email already exists: " + email);
             throw new RuntimeException("Email already registered");
         }
         
         try {
             // Hash the password
             String hashedPassword = passwordEncoder.encode(password);
-            System.out.println("Password hashed successfully for user: " + email);
+            // System.out.println("Password hashed successfully for user: " + email);
             
             // Create a new user
             User user = new User(fullName, email, hashedPassword);
-            System.out.println("User object created: " + user);
+            // System.out.println("User object created: " + user);
             
             // Save the user to the database
             User savedUser = userRepository.save(user);
-            System.out.println("User saved successfully with email: " + savedUser.getEmail());
+            // System.out.println("User saved successfully with email: " + savedUser.getEmail());
             
             return savedUser;
         } catch (Exception e) {
-            System.err.println("Error during user registration: " + e.getMessage());
+            // System.err.println("Error during user registration: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("Registration failed: " + e.getMessage(), e);
         }
     }
     public User authenticateUser(String email, String password) {
-    System.out.println("Authenticating user with email: " + email);
+    // System.out.println("Authenticating user with email: " + email);
     
     if (email == null || email.trim().isEmpty()) {
         throw new IllegalArgumentException("Email cannot be null or empty");
@@ -119,7 +119,7 @@ public class UserService {
         
         if (userOptional.isPresent()) {
             User user = userOptional.get();
-            System.out.println("User found in database: " + user.getEmail());
+            // System.out.println("User found in database: " + user.getEmail());
             
             String storedPassword = user.getPassword();
             boolean passwordMatches = false;
@@ -128,11 +128,11 @@ public class UserService {
             if (storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$")) {
                 // סיסמה מוצפנת - השתמש ב-BCrypt
                 passwordMatches = passwordEncoder.matches(password, storedPassword);
-                System.out.println("Using BCrypt validation");
+                // System.out.println("Using BCrypt validation");
             } else {
                 // סיסמה לא מוצפנת (legacy) - השוואה ישירה
                 passwordMatches = password.equals(storedPassword);
-                System.out.println("Using plain text validation (legacy)");
+                // System.out.println("Using plain text validation (legacy)");
                 
                 // אופציונלי: עדכן לסיסמה מוצפנת
                 if (passwordMatches) {
@@ -144,7 +144,7 @@ public class UserService {
             }
             
             if (passwordMatches) {
-                System.out.println("Password matched for user: " + email);
+                // System.out.println("Password matched for user: " + email);
                 
                 // Set the current authenticated user
                 VaadinSession session = VaadinSession.getCurrent();
@@ -153,22 +153,22 @@ public class UserService {
                 
                 return user;
             } else {
-                System.out.println("Password did not match for user: " + email);
-                System.out.println("Provided password: " + password);
-                System.out.println("Stored hash: " + storedPassword);
+                // System.out.println("Password did not match for user: " + email);
+                // System.out.println("Provided password: " + password);
+                // System.out.println("Stored hash: " + storedPassword);
             }
         } else {
-            System.out.println("No user found with email: " + email);
+            // System.out.println("No user found with email: " + email);
             
             // Debug: הדפס את כל המשתמשים כדי לבדוק מה יש במסד הנתונים
             List<User> allUsers = getAllUsers();
-            System.out.println("Total users in database: " + allUsers.size());
+            // System.out.println("Total users in database: " + allUsers.size());
             for (User u : allUsers) {
-                System.out.println("  - User: " + u.getEmail() + " (ID: " + u.getEmail() + ")");
+                // System.out.println("  - User: " + u.getEmail() + " (ID: " + u.getEmail() + ")");
             }
         }
     } catch (Exception e) {
-        System.err.println("Error during authentication: " + e.getMessage());
+        // System.err.println("Error during authentication: " + e.getMessage());
         e.printStackTrace();
     }
     
@@ -247,7 +247,7 @@ public void deleteUserByEmail(String email) {
     Optional<User> userOptional = userRepository.findByEmail(email);
     if (userOptional.isPresent()) {
         userRepository.delete(userOptional.get());
-        System.out.println("Deleted user: " + email);
+        // System.out.println("Deleted user: " + email);
     }
 }
 

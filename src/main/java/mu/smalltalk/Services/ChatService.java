@@ -42,7 +42,7 @@ public class ChatService {
             byte[] messageBytes = message.getBytes();
             messageService.saveTextMessage(senderId, groupId, messageBytes, groupId);
         } catch (Exception e) {
-            System.err.println("Error adding group message: " + e.getMessage());
+            // System.err.println("Error adding group message: " + e.getMessage());
             throw new RuntimeException("Failed to save message", e);
         }
     }
@@ -60,7 +60,7 @@ public class ChatService {
             // טוען רק הודעות אחרונות עם projection
             return loadLatestMessagesOptimized(groupId, INITIAL_LOAD_SIZE);
         } catch (Exception e) {
-            System.err.println("Error loading initial messages: " + e.getMessage());
+            // System.err.println("Error loading initial messages: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -89,7 +89,7 @@ public class ChatService {
             return result;
             
         } catch (Exception e) {
-            System.err.println("Error in optimized message loading: " + e.getMessage());
+            // System.err.println("Error in optimized message loading: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -145,7 +145,7 @@ public class ChatService {
                     .collect(Collectors.toList());
                     
         } catch (Exception e) {
-            System.err.println("Error loading more messages: " + e.getMessage());
+            // System.err.println("Error loading more messages: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -159,7 +159,7 @@ public class ChatService {
             List<String> messages = loadMoreMessages(groupId, page);
             return CompletableFuture.completedFuture(messages);
         } catch (Exception e) {
-            System.err.println("Error in async message loading: " + e.getMessage());
+            // System.err.println("Error in async message loading: " + e.getMessage());
             return CompletableFuture.completedFuture(new ArrayList<>());
         }
     }
@@ -173,7 +173,7 @@ public class ChatService {
             List<String> messages = getInitialMessages(groupId);
             return CompletableFuture.completedFuture(messages);
         } catch (Exception e) {
-            System.err.println("Error in async message loading: " + e.getMessage());
+            // System.err.println("Error in async message loading: " + e.getMessage());
             return CompletableFuture.completedFuture(new ArrayList<>());
         }
     }
@@ -187,7 +187,7 @@ public class ChatService {
             List<String> messages = loadLatestMessagesOptimized(groupId, size);
             return CompletableFuture.completedFuture(messages);
         } catch (Exception e) {
-            System.err.println("Error in async message loading: " + e.getMessage());
+            // System.err.println("Error in async message loading: " + e.getMessage());
             return CompletableFuture.completedFuture(new ArrayList<>());
         }
     }
@@ -204,7 +204,7 @@ public class ChatService {
         try {
             return messageRepository.countByChatIdOptimized(groupId);
         } catch (Exception e) {
-            System.err.println("Error counting messages: " + e.getMessage());
+            // System.err.println("Error counting messages: " + e.getMessage());
             return 0;
         }
     }
@@ -226,7 +226,7 @@ public class ChatService {
                     .collect(Collectors.toList());
                     
         } catch (Exception e) {
-            System.err.println("Error loading messages by time range: " + e.getMessage());
+            // System.err.println("Error loading messages by time range: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -262,7 +262,7 @@ public class ChatService {
                     .collect(Collectors.toList());
                     
         } catch (Exception e) {
-            System.err.println("Error in batch loading: " + e.getMessage());
+            // System.err.println("Error in batch loading: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -316,23 +316,15 @@ public class ChatService {
             return loadLatestMessagesOptimized(groupId, loadSize);
             
         } catch (Exception e) {
-            System.err.println("Error in adaptive loading: " + e.getMessage());
+            // System.err.println("Error in adaptive loading: " + e.getMessage());
             return new ArrayList<>();
         }
     }
     
-    // ================== מתודות תאימות עם קוד ישן ==================
-    
-    /**
-     * טעינת הודעות סטנדרטית - לתאימות עם קוד ישן
-     */
     public List<String> getGroupMessages(String groupId) {
         return getInitialMessages(groupId);
     }
-    
-    /**
-     * טעינת הודעות עם גודל מותאם - לתאימות עם קוד ישן
-     */
+   
     public List<String> getGroupMessages(String groupId, int pageSize) {
         if (groupId == null || groupId.trim().isEmpty()) {
             return new ArrayList<>();
@@ -345,7 +337,7 @@ public class ChatService {
         try {
             return loadLatestMessagesOptimized(groupId, pageSize);
         } catch (Exception e) {
-            System.err.println("Error loading group messages with pagination: " + e.getMessage());
+            // System.err.println("Error loading group messages with pagination: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -359,7 +351,7 @@ public class ChatService {
             List<String> messages = getInitialMessages(groupId);
             return CompletableFuture.completedFuture(messages);
         } catch (Exception e) {
-            System.err.println("Error in async message loading: " + e.getMessage());
+            // System.err.println("Error in async message loading: " + e.getMessage());
             return CompletableFuture.completedFuture(new ArrayList<>());
         }
     }
@@ -379,7 +371,7 @@ public class ChatService {
         try {
             return loadLatestMessagesOptimized(groupId, count);
         } catch (Exception e) {
-            System.err.println("Error loading latest messages: " + e.getMessage());
+            // System.err.println("Error loading latest messages: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -400,7 +392,7 @@ public class ChatService {
             int page = Math.max(0, offset / limit);
             return loadMoreMessages(groupId, page);
         } catch (Exception e) {
-            System.err.println("Error loading more messages: " + e.getMessage());
+            // System.err.println("Error loading more messages: " + e.getMessage());
             return new ArrayList<>();
         }
     }
