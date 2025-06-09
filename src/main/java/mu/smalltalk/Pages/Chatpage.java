@@ -161,7 +161,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         // Initialize sessionId
         sessionId = initializeSessionId();
 
-<<<<<<< HEAD
         // Use authenticated user's email or name if available
         User currentUser = UserService.getAuthenticatedUser();
         // String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
@@ -185,13 +184,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
             }
 
             groupSelector.setItems(userGroups);
-=======
-        // If no groups exist, create a default group for this user
-        if (userGroups.isEmpty()) {
-            // System.out.println("No groups found for user " + currentUser.getEmail() + ", creating a default group");
-            Group defaultGroup = GroupService.createGroup("Default Group", currentUser.getEmail());
-            userGroups = GroupService.getUserGroups(currentUser.getEmail());
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
         }
 
         groupSelector.addValueChangeListener(event -> {
@@ -256,73 +248,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         toggleEncryptionButton.setVisible(false);
     }
 
-<<<<<<< HEAD
-=======
-    groupSelector.addValueChangeListener(event -> {
-        // System.out.println("Selected Group: " + event.getValue());
-
-        if (event.getValue() != null) {
-            currentGroupId = event.getValue().getId();
-            // System.out.println("Current Group ID set to: " + currentGroupId);
-
-            // Show user list when a group is selected
-            userListContainer.setVisible(true);
-            toggleEncryptionButton.setVisible(true);
-
-            User loggedInUser = UserService.getAuthenticatedUser();
-            String userName = (loggedInUser != null) ? loggedInUser.getFullName() : sessionId;
-
-            // Just show the user name, not the group name
-            updateSessionIdDisplay(userName);
-
-            refreshChatHistory();
-            updateUserList();
-            
-            // Enable message input when group is selected
-            messageInput.setEnabled(true);
-            if (mediaUpload != null) {
-                mediaUpload.setVisible(true);
-            }
-        } else {
-            // Hide user list when no group is selected
-            userListContainer.setVisible(false);
-            toggleEncryptionButton.setVisible(false);
-            
-            // Disable message input when no group is selected
-            messageInput.setEnabled(false);
-            if (mediaUpload != null) {
-                mediaUpload.setVisible(false);
-            }
-        }
-    });
-    
-    // Create the navigation bar
-    HorizontalLayout navbar = createNavigationBar();
-
-    // Add a section for chat
-    H3 chatHeader = new H3("Chat");
-    chatHeader.getStyle().set("flex-shrink", "0");
-
-    // Initially disable message input until group is selected
-    messageInput.setEnabled(false);
-   
-
-    // Add components to main layout in the correct order
-    add(navbar, groupSelector, toggleEncryptionButton, userListContainer, chatHeader, 
-        loadingProgressBar, loadingMessageDiv, messageStatusDiv, chatContainer, messageInputWrapper);
-
-    // Set flex properties to make chat container take remaining space
-    setFlexGrow(1, chatContainer);
-
-    setupMessageHandler();
-    setupCrossBrowserCommunication();
-    
-    // Initially hide encryption toggle button
-    toggleEncryptionButton.setVisible(false);
-}
-
-
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
     private void toggleEncryptionDisplay() {
         showEncryptionMessages = !showEncryptionMessages;
 
@@ -645,7 +570,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                     if (ui != null && ui.isAttached()) {
                         ui.access(() -> {
                             showLoadingIndicators(false);
-<<<<<<< HEAD
                             // Don't show error to user, just log it
                             // System.err.println("Error loading messages: " + ex.getMessage());
                             ui.push();
@@ -653,37 +577,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                     }
                     return null;
                 });
-=======
-                            
-                            // Scroll to bottom after short delay
-                            UI.getCurrent().getPage().executeJs(
-                                "setTimeout(() => { " +
-                                "  const chatContainer = document.querySelector('.chat-container');" +
-                                "  if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;" +
-                                "}, 50);"
-                            );
-                            
-                        } catch (Exception e) {
-                            // System.err.println("Error displaying messages: " + e.getMessage());
-                            showLoadingIndicators(false);
-                        }
-                        ui.push();
-                    });
-                }
-            })
-            .exceptionally(ex -> {
-                UI ui = UI.getCurrent();
-                if (ui != null && ui.isAttached()) {
-                    ui.access(() -> {
-                        showLoadingIndicators(false);
-                        // Don't show error to user, just log it
-                        // System.err.println("Error loading messages: " + ex.getMessage());
-                        ui.push();
-                    });
-                }
-                return null;
-            });
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
     }
 
     private List<String> filterMessages(List<String> messages) {
@@ -782,17 +675,11 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
     private void setupMessageHandler() {
         UI currentUI = UI.getCurrent();
         VaadinSession currentSession = VaadinSession.getCurrent();
-<<<<<<< HEAD
-
-=======
-    
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
         messageInput.addSubmitListener(submitEvent -> {
             if (currentGroupId == null) {
                 Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
                 return;
             }
-<<<<<<< HEAD
             String message = submitEvent.getValue();
             String timestamp = dateFormat.format(new Date());
 
@@ -811,16 +698,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
             addMessageToChat(encryptingMessage);
 
             // 3. בצע הצפנה ברקע
-=======
-    
-            String message = submitEvent.getValue();
-            String timestamp = dateFormat.format(new Date());
-    
-            User currentUser = UserService.getAuthenticatedUser();
-            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-    
-            // צור הודעה מורכבת עם המידע המוצפן והמקורי
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
             encryptionService.encryptStringAsync(message)
                     .thenAccept(encryptedMessage -> {
                         if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
@@ -828,7 +705,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                             try {
                                 currentUI.access(() -> {
                                     String encodedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
-<<<<<<< HEAD
                                     String encTimestamp = dateFormat.format(new Date());
 
                                     // החלף את הודעת ה"Encrypting..." בהודעה המוצפנת
@@ -841,17 +717,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                                     // שמור בבסיס נתונים ושלח לאחרים
                                     addMessageToDatabase(encryptedDisplayMessage, currentGroupId);
                                     GlobalMessageBroadcaster.broadcastToGroup(encryptedDisplayMessage, currentGroupId);
-=======
-                                    
-                                    // שמור הודעה אחת עם שני הערכים
-                                    String combinedMessage = "[" + timestamp + "] " + displayName + ":<br>" +
-                                            "<!-- ENCRYPTION_DATA:" + encodedMessage + " -->" +
-                                            message; // הטקסט המקורי נשאר בסוף
-    
-                                    sendGroupMessageSafely(combinedMessage, currentGroupId);
-                                    showMessageStatus("Message sent successfully!", true);
-                                    
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
                                     currentUI.push();
                                 });
                             } finally {
@@ -860,25 +725,15 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                         }
                     })
                     .exceptionally(ex -> {
-<<<<<<< HEAD
-=======
-                        // אם ההצפנה נכשלה, שלח לפחות את ההודעה הרגילה
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
                         if (currentUI.isAttached() && !currentSession.getSession().isNew()) {
                             currentSession.lock();
                             try {
                                 currentUI.access(() -> {
-<<<<<<< HEAD
                                     String errorMessage = "[" + timestamp + "] " + displayName +
                                             " <b>[Encryption Failed]</b>:<br>❌ " + ex.getMessage();
 
                                     // החלף את הודעת ה"Encrypting..." בהודעת שגיאה
                                     replaceLastEncryptingMessage(errorMessage);
-=======
-                                    String normalMessage = "[" + timestamp + "] " + displayName + ":<br>" + message;
-                                    sendGroupMessageSafely(normalMessage, currentGroupId);
-                                    showMessageStatus("Message sent (encryption failed)", false);
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
                                     currentUI.push();
                                 });
                             } finally {
@@ -887,7 +742,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                         }
                         return null;
                     });
-<<<<<<< HEAD
             showMessageStatus("Message sent successfully!", true);
         });
     }
@@ -916,10 +770,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
         addMessageToChat(newMessage);
     }
 
-=======
-        });
-    }
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
     private void setupCrossBrowserCommunication() {
         UI ui = UI.getCurrent();
         if (ui != null) {
@@ -1015,12 +865,11 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
             });
 
             if (broadcasterRegistration == null) {
-<<<<<<< HEAD
+
                 // System.err.println("Failed to register with broadcaster for UI: " +
                 // ui.getUIId());
-=======
+
                 // System.err.println("Failed to register with broadcaster for UI: " + ui.getUIId());
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
                 Notification.show("Failed to connect to the chat server. Please refresh the page.",
                         3000, Notification.Position.MIDDLE);
             }
@@ -1122,7 +971,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
                 "this.querySelector('vaadin-upload-file-list').style.display = 'none';" +
                         "this.shadowRoot.querySelector('[part=\"drop-label\"]').style.display = 'none';");
 
-<<<<<<< HEAD
         upload.setAcceptedFileTypes("image/*", "audio/*");
         upload.setMaxFileSize(16 * 1024 * 1024); // 16 MB
 
@@ -1236,110 +1084,6 @@ public class Chatpage extends VerticalLayout implements BeforeEnterObserver {
 
     clearUpload.run();
 });
-=======
-    upload.addSucceededListener(event -> {
-        if (currentGroupId == null) {
-            Notification.show("Please select a group first", 2000, Notification.Position.MIDDLE);
-            clearUpload.run();
-            return;
-        }
-    
-        UI ui = UI.getCurrent();
-        VaadinSession session = VaadinSession.getCurrent();
-    
-        User currentUser = UserService.getAuthenticatedUser();
-        String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-        String senderId = (currentUser != null) ? currentUser.getEmail() : sessionId;
-    
-        String fileName = event.getFileName();
-        String mimeType = event.getMIMEType();
-        try {
-            InputStream inputStream = buffer.getInputStream();
-            byte[] fileData = inputStream.readAllBytes();
-            String base64Data = Base64.getEncoder().encodeToString(fileData);
-            String timestamp = dateFormat.format(new Date());
-    
-            String mediaType = mimeType.startsWith("image/") ? "IMAGE" : "SOUND";
-            Message mediaMessage = new Message(senderId, currentGroupId, null, fileData, mediaType, currentGroupId);
-            messageRepository.save(mediaMessage);
-    
-            String mediaHtml;
-            if (mimeType.startsWith("image/")) {
-                mediaHtml = "[" + timestamp + "] " + displayName + " <b>[תמונה]</b>:<br>" +
-                        "<img src='data:" + mimeType + ";base64," + base64Data +
-                        "' alt='Image' style='max-width: 100%; max-height: 300px;'>";
-            } else if (mimeType.startsWith("audio/")) {
-                mediaHtml = "[" + timestamp + "] " + displayName + " <b>[אודיו]</b>:<br>" +
-                        "<audio controls><source src='data:" + mimeType + ";base64," +
-                        base64Data + "' type='" + mimeType + "'></audio>";
-            } else {
-                clearUpload.run();
-                return;
-            }
-    
-            // רק שלח את המדיה - אל תוסיף מקומית
-            // הוספה מקומית תקרה דרך ה-broadcaster
-            sendGroupMessageSafely(mediaHtml, currentGroupId);
-    
-            final byte[] finalFileData = fileData;
-            encryptionService.encryptAsync(finalFileData)
-                    .thenAccept(encryptedData -> {
-                        if (ui.isAttached() && !session.getSession().isNew()) {
-                            session.lock();
-                            try {
-                                ui.access(() -> {
-                                    String encTimestamp = dateFormat.format(new Date());
-                                    String successMessage = "[" + encTimestamp + "] " + displayName +
-                                            " <b>[File Encrypted]</b>:<br>The file " + fileName
-                                            + " encrypted successfully";
-    
-                                    // רק שלח את הודעת ההצפנה - אל תוסיף מקומית
-                                    sendGroupMessageSafely(successMessage, currentGroupId);
-    
-                                    ui.push();
-                                });
-                            } finally {
-                                session.unlock();
-                            }
-                        }
-                    })
-                    .exceptionally(ex -> {
-                        if (ui.isAttached() && !session.getSession().isNew()) {
-                            session.lock();
-                            try {
-                                ui.access(() -> {
-                                    String errorTimestamp = dateFormat.format(new Date());
-                                    String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                            " <b>[Error]</b>:<br>Error encrypting file: " + ex.getMessage();
-    
-                                    // רק שלח את הודעת השגיאה - אל תוסיף מקומית
-                                    sendGroupMessageSafely(errorMessage, currentGroupId);
-    
-                                    ui.push();
-                                });
-                            } finally {
-                                session.unlock();
-                            }
-                        }
-                        return null;
-                    });
-        } catch (IOException e) {
-            String errorTimestamp = dateFormat.format(new Date());
-            String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                    " <b>[Error]</b>:<br>Error processing file: " + e.getMessage();
-    
-            // רק שלח את הודעת השגיאה - אל תוסיף מקומית
-            sendGroupMessageSafely(errorMessage, currentGroupId);
-        }
-    
-        clearUpload.run();
-    });
-}
-private void sendGroupMessageSafely(String message, String groupId) {
-    if (groupId == null) {
-        // System.err.println("Cannot send message: Group ID is null");
-        return;
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
     }
 
     private void sendGroupMessageSafely(String message, String groupId) {
@@ -1379,11 +1123,6 @@ private void sendGroupMessageSafely(String message, String groupId) {
             } catch (Exception e) {
                 // Log error silently
             }
-<<<<<<< HEAD
-=======
-        } catch (Exception e) {
-            // System.err.println("Error executing JavaScript: " + e.getMessage());
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
         }
     }
 
@@ -1418,72 +1157,6 @@ private void sendGroupMessageSafely(String message, String groupId) {
         addMessageToChat(newMessage);
     }
 
-<<<<<<< HEAD
-=======
-    private void decryptAndDisplayMessage(String encodedMessage, String groupId) {
-        try {
-            byte[] encryptedBytes = Base64.getDecoder().decode(encodedMessage);
-    
-            UI ui = UI.getCurrent();
-            VaadinSession session = VaadinSession.getCurrent();
-    
-            User currentUser = UserService.getAuthenticatedUser();
-            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-    
-            encryptionService.decryptAsync(encryptedBytes)
-                    .thenAccept(decryptedBytes -> {
-                        if (ui.isAttached() && !session.getSession().isNew()) {
-                            session.lock();
-                            try {
-                                ui.access(() -> {
-                                    String decTimestamp = dateFormat.format(new Date());
-                                    String decryptedText = new String(decryptedBytes, StandardCharsets.UTF_8);
-                                    String decryptedMessage = "[" + decTimestamp + "] " + displayName +
-                                            " <b>[Decrypted]</b>:<br>" + decryptedText;
-    
-                                    // רק שלח את ההודעה הפענוחה - אל תוסיף מקומית
-                                    sendGroupMessageSafely(decryptedMessage, groupId);
-    
-                                    ui.push();
-                                });
-                            } finally {
-                                session.unlock();
-                            }
-                        }
-                    })
-                    .exceptionally(ex -> {
-                        if (ui.isAttached() && !session.getSession().isNew()) {
-                            session.lock();
-                            try {
-                                ui.access(() -> {
-                                    String errorTimestamp = dateFormat.format(new Date());
-                                    String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                                            " <b>[Error]</b>:<br>Error decrypting message: " + ex.getMessage();
-    
-                                    // רק שלח את הודעת השגיאה - אל תוסיף מקומית
-                                    sendGroupMessageSafely(errorMessage, groupId);
-    
-                                    ui.push();
-                                });
-                            } finally {
-                                session.unlock();
-                            }
-                        }
-                        return null;
-                    });
-        } catch (IllegalArgumentException e) {
-            String errorTimestamp = dateFormat.format(new Date());
-            User currentUser = UserService.getAuthenticatedUser();
-            String displayName = (currentUser != null) ? currentUser.getFullName() : sessionId;
-    
-            String errorMessage = "[" + errorTimestamp + "] " + displayName +
-                    " <b>[Error]</b>:<br>Error decoding Base64: " + e.getMessage();
-    
-            // רק שלח את הודעת השגיאה - אל תוסיף מקומית
-            sendGroupMessageSafely(errorMessage, groupId);
-        }
-    }
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
     private Aes256 initializeEncryption() {
         try {
             byte[] key = new byte[32];

@@ -81,15 +81,9 @@ public class GlobalMessageBroadcaster {
                     // System.out.println("Sending to UI: " + ui.getUIId());
                     ui.access(() -> {
                         try {
-<<<<<<< HEAD
                              ui.getPage().executeJs(
                         "localStorage.setItem('chat-update-trigger', Date.now().toString());"
                     );
-=======
-                            ui.getPage().executeJs(
-                                "localStorage.setItem('chat-update-trigger', Date.now().toString());"
-                            );
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
                             consumer.accept(message, groupId);
                             ui.push();
                         } catch (Exception e) {
@@ -97,11 +91,7 @@ public class GlobalMessageBroadcaster {
                         }
                     });
                     
-<<<<<<< HEAD
                    
-=======
-                  
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
                 } catch (UIDetachedException e) {
                     // System.out.println("UI " + ui.getUIId() + " detached, marking for removal");
                     toRemove.add(listener);
@@ -115,7 +105,6 @@ public class GlobalMessageBroadcaster {
         if (!toRemove.isEmpty()) {
             listeners.removeAll(toRemove);
             // System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
-<<<<<<< HEAD
         }
     }
     
@@ -177,8 +166,6 @@ public class GlobalMessageBroadcaster {
         if (!toRemove.isEmpty()) {
             listeners.removeAll(toRemove);
             // System.out.println("Removed " + toRemove.size() + " detached listeners. Remaining: " + listeners.size());
-=======
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
         }
     }
     

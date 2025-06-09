@@ -9,16 +9,9 @@ import com.vaadin.flow.component.page.Push;
 
 import mu.smalltalk.Services.MongoDbSerivce;
 import mu.smalltalk.entitis.User;
-<<<<<<< HEAD
 @Push
 @SpringBootApplication
 public class AppMain implements AppShellConfigurator,CommandLineRunner
-=======
-
-@Push
-@SpringBootApplication
-public class AppMain implements AppShellConfigurator, CommandLineRunner
->>>>>>> 5a37b051bac5534357b52d069b4dde7b2776340e
 {
     // // @Autowired
     // private MongoDbSerivce mongoDbSerivce;
